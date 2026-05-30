@@ -44,6 +44,15 @@ Export the returned `data.accessToken`:
 export ADMIN_TOKEN="adm-..."
 ```
 
+On first login, change the generated password before using other admin APIs:
+
+```bash
+curl -X POST http://127.0.0.1:8080/auth/password \
+  -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -d '{"oldPassword":"<startup-password>","newPassword":"<new-password>"}'
+```
+
 ## Import One Account
 
 Minimum payload:

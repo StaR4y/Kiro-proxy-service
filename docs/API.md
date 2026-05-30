@@ -61,6 +61,9 @@ password: <random password printed in startup logs once>
 
 The generated password is not stored in plain text and is not printed again.
 
+If `user.firstLogin=true` after login, the session can only call `POST /auth/password`.
+Other admin APIs return `403 FIRST_LOGIN_PASSWORD_CHANGE_REQUIRED` until the password is changed.
+
 ## Response Envelope
 
 Admin APIs return a common envelope:
@@ -367,6 +370,8 @@ Response:
 ```http
 POST /auth/password
 ```
+
+This endpoint is allowed for first-login admin sessions.
 
 Request:
 
@@ -753,6 +758,7 @@ GET /actuator/prometheus
 | --- | --- |
 | `400` | Invalid request body or missing required field. |
 | `401` | Missing or invalid API key, admin session, or legacy admin token. |
+| `403` | First-login admin session must change password before using admin APIs. |
 | `409` | Duplicate admin username or conflicting resource state. |
 | `413` | Request body exceeds `KIRO_MAX_REQUEST_BODY_BYTES`. |
 | `429` | Rate limit exceeded or credits limit exceeded. |

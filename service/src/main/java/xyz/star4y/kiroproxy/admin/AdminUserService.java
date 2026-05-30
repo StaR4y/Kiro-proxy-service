@@ -33,7 +33,7 @@ public class AdminUserService {
         return repository.count()
             .flatMap(count -> {
                 if (count > 0) {
-                    return Mono.just(BootstrapAdmin.existing());
+                    return existingBootstrap();
                 }
                 String password = passwordHasher.randomPassword();
                 AdminUserEntity entity = new AdminUserEntity();
@@ -46,7 +46,7 @@ public class AdminUserService {
                 applyPassword(entity, password);
                 return repository.save(entity)
                     .map(saved -> BootstrapAdmin.created(saved.getUsername(), password))
-                    .onErrorResume(DuplicateKeyException.class, error -> Mono.just(BootstrapAdmin.existing()));
+                    .onErrorResume(DuplicateKeyException.class, error -> existingBootstrap());
             });
     }
 
@@ -127,8 +127,16 @@ public class AdminUserService {
                 }
                 applyPassword(entity, request.newPassword());
                 entity.setFirstLogin(false);
-                return repository.save(entity).then();
+                return repository.save(entity)
+                    .doOnSuccess(saved -> sessionService.clearFirstLogin(saved.getUserId()))
+                    .then();
             });
+    }
+
+    private Mono<BootstrapAdmin> existingBootstrap() {
+        return repository.findByUsername(DEFAULT_ADMIN_USERNAME)
+            .map(entity -> BootstrapAdmin.existing(entity.getUsername(), Boolean.TRUE.equals(entity.getFirstLogin())))
+            .defaultIfEmpty(BootstrapAdmin.existing(null, false));
     }
 
     private void applyPassword(AdminUserEntity entity, String password) {
@@ -144,13 +152,13 @@ public class AdminUserService {
         return role.trim().toUpperCase();
     }
 
-    public record BootstrapAdmin(boolean created, String username, String password) {
+    public record BootstrapAdmin(boolean created, String username, String password, boolean firstLogin) {
         static BootstrapAdmin created(String username, String password) {
-            return new BootstrapAdmin(true, username, password);
+            return new BootstrapAdmin(true, username, password, true);
         }
 
-        static BootstrapAdmin existing() {
-            return new BootstrapAdmin(false, null, null);
+        static BootstrapAdmin existing(String username, boolean firstLogin) {
+            return new BootstrapAdmin(false, username, null, firstLogin);
         }
     }
 }

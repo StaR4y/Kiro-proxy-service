@@ -47,6 +47,11 @@ public class StartupGuideLogger {
             log.warn("Username: {}", bootstrap.username());
             log.warn("Password: {}", bootstrap.password());
             log.warn("Change it with POST {}/auth/password after login.", baseUrl);
+        } else if (bootstrap.firstLogin()) {
+            log.warn("Default admin user already exists and still uses the first-login password.");
+            log.warn("The password was printed only during first startup and will not be shown again.");
+            log.warn("Login as '{}' with the saved password, then change it with POST {}/auth/password.", bootstrap.username(), baseUrl);
+            log.warn("Other admin APIs are blocked until the password is changed.");
         } else {
             log.info("Admin user table already initialized. Login with an existing admin user.");
         }

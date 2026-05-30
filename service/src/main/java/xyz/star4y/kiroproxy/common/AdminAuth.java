@@ -20,6 +20,18 @@ public class AdminAuth {
     }
 
     public AdminPrincipal verify(ServerWebExchange exchange) {
+        AdminPrincipal principal = verifyAllowFirstLogin(exchange);
+        if (principal.firstLogin()) {
+            throw new ApiException(
+                HttpStatus.FORBIDDEN,
+                "FIRST_LOGIN_PASSWORD_CHANGE_REQUIRED",
+                "Login succeeded, but the default admin password must be changed with POST /auth/password before using admin APIs"
+            );
+        }
+        return principal;
+    }
+
+    public AdminPrincipal verifyAllowFirstLogin(ServerWebExchange exchange) {
         String configured = properties.getAdminToken();
         String provided = exchange.getRequest().getHeaders().getFirst("X-Admin-Token");
         String authorization = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
@@ -29,7 +41,7 @@ public class AdminAuth {
 
         if (provided != null && !provided.isBlank()) {
             if (configured != null && !configured.isBlank() && configured.equals(provided)) {
-                return new AdminPrincipal("env-admin", "env-admin", "ADMIN", null);
+                return new AdminPrincipal("env-admin", "env-admin", "ADMIN", null, false);
             }
             return sessionService.verify(provided);
         }

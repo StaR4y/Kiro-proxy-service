@@ -108,6 +108,23 @@ curl -X POST http://127.0.0.1:8080/admin/users/{userId}/reset-password \
 
 For a disposable local database only, you can drop and recreate the database to trigger first-start bootstrap again. Do not do this in production.
 
+## Admin APIs Return `403 FIRST_LOGIN_PASSWORD_CHANGE_REQUIRED`
+
+Cause:
+
+The admin account has logged in with a first-start or reset password and has not changed it yet.
+
+Fix:
+
+```bash
+curl -X POST http://127.0.0.1:8080/auth/password \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer adm-...' \
+  -d '{"oldPassword":"<current-password>","newPassword":"<new-password>"}'
+```
+
+The password is never printed again after the first bootstrap. If it is lost, another admin must reset it, or a disposable local database can be recreated.
+
 ## Admin APIs Return `401`
 
 Cause:

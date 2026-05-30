@@ -29,7 +29,7 @@ public class AdminAuthController implements AdminAuthApi {
         ServerWebExchange exchange,
         @Valid @RequestBody AdminDtos.ChangePasswordRequest request
     ) {
-        AdminPrincipal principal = adminAuth.verify(exchange);
+        AdminPrincipal principal = adminAuth.verifyAllowFirstLogin(exchange);
         return adminUserService.changePassword(principal, request).thenReturn(ApiResponse.ok(null));
     }
 }

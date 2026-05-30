@@ -23,8 +23,24 @@ public class AdminSessionService {
     public SessionToken create(AdminUserEntity user) {
         Instant expiresAt = Instant.now().plus(properties.getAdminSessionTtl());
         String token = "adm-" + Hashing.randomToken(32);
-        sessions.put(token, new AdminPrincipal(user.getUserId(), user.getUsername(), user.getRole(), expiresAt));
+        boolean firstLogin = Boolean.TRUE.equals(user.getFirstLogin());
+        sessions.put(token, new AdminPrincipal(user.getUserId(), user.getUsername(), user.getRole(), expiresAt, firstLogin));
         return new SessionToken(token, expiresAt);
+    }
+
+    public void clearFirstLogin(String userId) {
+        sessions.replaceAll((token, principal) -> {
+            if (!principal.userId().equals(userId) || !principal.firstLogin()) {
+                return principal;
+            }
+            return new AdminPrincipal(
+                principal.userId(),
+                principal.username(),
+                principal.role(),
+                principal.expiresAt(),
+                false
+            );
+        });
     }
 
     public AdminPrincipal verify(String token) {

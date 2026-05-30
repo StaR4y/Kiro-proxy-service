@@ -81,7 +81,8 @@ username: admin
 password: <random password printed in startup logs once>
 ```
 
-Use `POST /auth/login` to exchange that password for an `adm-...` session token, then send it as `Authorization: Bearer <token>`.
+Use `POST /auth/login` to exchange that password for an `adm-...` session token, then call `POST /auth/password`.
+Other admin APIs are blocked for first-login sessions until the password is changed.
 
 ## Recommended Production Defaults
 

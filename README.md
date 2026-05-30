@@ -78,6 +78,15 @@ curl -X POST http://127.0.0.1:8080/auth/login \
   -d '{"username":"admin","password":"<startup-password>"}'
 ```
 
+If this is the first login, change the password before using other admin APIs:
+
+```bash
+curl -X POST http://127.0.0.1:8080/auth/password \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer adm-REPLACE_ME' \
+  -d '{"oldPassword":"<startup-password>","newPassword":"<new-password>"}'
+```
+
 Open the interactive API docs:
 
 ```text

@@ -6,6 +6,7 @@ public record AdminPrincipal(
     String userId,
     String username,
     String role,
-    Instant expiresAt
+    Instant expiresAt,
+    boolean firstLogin
 ) {
 }
