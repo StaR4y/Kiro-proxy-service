@@ -1,0 +1,18 @@
+{
+  "upsert": true,
+  "accounts": [
+    {
+      "accountId": "kiro-main",
+      "email": "user@example.com",
+      "accessToken": "kiro-access-token",
+      "refreshToken": "optional-refresh-token",
+      "region": "us-east-1",
+      "authMethod": "idc",
+      "provider": "BuilderID",
+      "profileArn": "arn:aws:codewhisperer:us-east-1:638616132270:profile/AAAACCCCXXXX",
+      "machineId": "optional-machine-id",
+      "proxyUrl": "http://user:pass@host:port",
+      "quotaLimit": 1000000
+    }
+  ]
+}
