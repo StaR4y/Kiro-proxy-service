@@ -16,6 +16,7 @@ Completed:
 - Startup guide logs for docs, health check, login, accounts, and first password flow.
 - Batch Kiro account import API with optional account upsert.
 - Basic startup/import helper scripts for local reverse-proxy operation.
+- Docker Compose and 1Panel deployment assets.
 - OpenAI-compatible `/v1/models`.
 - OpenAI-compatible `/v1/chat/completions`.
 - OpenAI Responses-style `/v1/responses`.
@@ -29,7 +30,7 @@ Completed:
 - AWS event-stream parser for assistant content and usage metadata.
 - OpenAPI UI at `/docs`.
 - Documentation for API, configuration, architecture, and troubleshooting.
-- Multi-module layout with API contracts in `api` and concrete server implementation in `service`.
+- Multi-module layout with API contracts in `api`, concrete server implementation in `service`, and Vue/Vite management console in `webui`.
 
 Verified:
 

@@ -157,7 +157,8 @@ public class ProxyFacade {
         Throwable error,
         Instant start
     ) {
-        Integer statusCode = error instanceof UpstreamException upstream ? upstream.getStatusCode() : null;
+        Throwable failure = rootFailure(error);
+        Integer statusCode = failure instanceof UpstreamException upstream ? upstream.getStatusCode() : null;
         AccountPoolService.UpstreamErrorType type = statusCode != null && (statusCode == 402 || statusCode == 403 || statusCode == 429)
             ? AccountPoolService.UpstreamErrorType.RECOVERABLE
             : AccountPoolService.UpstreamErrorType.FATAL;
@@ -174,22 +175,31 @@ public class ProxyFacade {
             0,
             BigDecimal.ZERO,
             Duration.between(start, Instant.now()).toMillis(),
-            error.getMessage()
+            failure.getMessage()
         ));
         return Mono.whenDelayError(accountStats, log).then();
     }
 
     private Throwable mapError(Throwable error) {
-        if (error instanceof ApiException) {
-            return error;
+        Throwable failure = rootFailure(error);
+        if (failure instanceof ApiException) {
+            return failure;
         }
-        if (error instanceof UpstreamException upstream) {
+        if (failure instanceof UpstreamException upstream) {
             HttpStatus status = upstream.getStatusCode() == 429 || upstream.getStatusCode() == 402
                 ? HttpStatus.TOO_MANY_REQUESTS
                 : HttpStatus.BAD_GATEWAY;
             return new ApiException(status, "UPSTREAM_ERROR", upstream.getMessage());
         }
-        return new ApiException(HttpStatus.BAD_GATEWAY, "UPSTREAM_ERROR", error.getMessage());
+        return new ApiException(HttpStatus.BAD_GATEWAY, "UPSTREAM_ERROR", failure.getMessage());
+    }
+
+    private Throwable rootFailure(Throwable error) {
+        Throwable current = error;
+        while (current.getCause() != null && current.getCause() != current) {
+            current = current.getCause();
+        }
+        return current;
     }
 
     private ResponseEntity<?> jsonResponse(boolean responseApi, JsonNode request, String mappedModel, KiroCompletionResult result) {

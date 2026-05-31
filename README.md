@@ -127,12 +127,12 @@ Batch import Kiro accounts:
 ADMIN_TOKEN="$ADMIN_TOKEN" ./scripts/import-accounts.sh examples/accounts.import.json
 ```
 
-Call the proxy with the generated `sk-kiro-...` key:
+Call the proxy with the generated `sk-...` key:
 
 ```bash
 curl -X POST http://127.0.0.1:8080/v1/chat/completions \
   -H 'Content-Type: application/json' \
-  -H 'Authorization: Bearer sk-kiro-REPLACE_ME' \
+  -H 'Authorization: Bearer sk-REPLACE_ME' \
   -d '{
     "model": "gpt-4o",
     "messages": [
@@ -146,6 +146,7 @@ curl -X POST http://127.0.0.1:8080/v1/chat/completions \
 
 - [API Reference](docs/API.md)
 - [Configuration](docs/CONFIGURATION.md)
+- [1Panel Deployment](docs/1PANEL_DEPLOY.md)
 - [Account Import and Proxy Startup](docs/OPERATIONS.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
@@ -155,6 +156,7 @@ curl -X POST http://127.0.0.1:8080/v1/chat/completions \
 
 - `api`: shared request/response models and Spring API contracts.
 - `service`: concrete Spring Boot server implementation, MySQL persistence, account pool, API key accounting, and Kiro reverse-proxy logic.
+- `webui`: Vue/Vite management console, exposed to Gradle through `:webui:npmBuild`, `:webui:npmLint`, and `:webui:npmDev`.
 
 ## Current Limitations
 

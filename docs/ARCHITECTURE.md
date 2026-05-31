@@ -21,7 +21,19 @@ service/src/main/java/xyz/star4y/kiroproxy
 ├── model        Model mapping persistence and implementation
 ├── proxy        OpenAI-compatible API implementation, Kiro payload conversion, upstream client
 └── stats        Request logs and admin log implementation
+
+webui
+├── src/api      TypeScript API client modules aligned with backend DTOs
+├── src/views    Vue management pages for accounts, keys, users, mappings, logs
+├── src/stores   Pinia auth state
+└── build.gradle Gradle bridge for npm install/build/lint/dev tasks
 ```
+
+Gradle modules:
+
+- `:api`: Java API contracts and DTOs.
+- `:service`: Spring Boot server application.
+- `:webui`: Vue/Vite frontend module. It is intentionally not a Java project.
 
 ## Request Flow
 

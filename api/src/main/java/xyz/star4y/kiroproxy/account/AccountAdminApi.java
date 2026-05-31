@@ -1,5 +1,6 @@
 package xyz.star4y.kiroproxy.account;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -28,7 +29,7 @@ public interface AccountAdminApi {
     @PostMapping("/import")
     Mono<ApiResponse<AccountDtos.ImportAccountsResponse>> importBatch(
         ServerWebExchange exchange,
-        @Valid @RequestBody AccountDtos.ImportAccountsRequest request
+        @RequestBody JsonNode request
     );
 
     @PatchMapping("/{accountId}")
@@ -47,6 +48,12 @@ public interface AccountAdminApi {
 
     @PostMapping("/{accountId}/reset")
     Mono<ApiResponse<AccountDtos.AccountResponse>> reset(ServerWebExchange exchange, @PathVariable String accountId);
+
+    @PostMapping("/test")
+    Mono<ApiResponse<AccountDtos.TestAccountsResponse>> test(
+        ServerWebExchange exchange,
+        @RequestBody AccountDtos.TestAccountsRequest request
+    );
 
     @DeleteMapping("/{accountId}")
     Mono<ApiResponse<Void>> delete(ServerWebExchange exchange, @PathVariable String accountId);

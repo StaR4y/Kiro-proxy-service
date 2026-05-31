@@ -16,7 +16,7 @@ import xyz.star4y.kiroproxy.config.ProxyProperties;
 @Service
 public class ApiKeyService {
 
-    private static final String KEY_PREFIX = "sk-kiro-";
+    private static final String KEY_PREFIX = "sk-";
 
     private final ApiKeyRepository repository;
     private final R2dbcEntityTemplate template;

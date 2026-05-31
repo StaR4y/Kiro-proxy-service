@@ -32,9 +32,11 @@ public class StartupGuideLogger {
     private void logGuide(AdminUserService.BootstrapAdmin bootstrap) {
         String port = environment.getProperty("local.server.port", environment.getProperty("server.port", "8080"));
         String baseUrl = "http://127.0.0.1:" + port;
+        String webuiUrl = webuiUrl(baseUrl);
 
         log.info("------------------------------------------------------------");
         log.info("Kiro Proxy Service is ready");
+        log.info("WebUI login:   {}", webuiUrl);
         log.info("API docs:      {}/docs", baseUrl);
         log.info("Health check:  {}/health", baseUrl);
         log.info("Models API:    {}/v1/models", baseUrl);
@@ -46,11 +48,11 @@ public class StartupGuideLogger {
             log.warn("Default admin user created. Save this password now.");
             log.warn("Username: {}", bootstrap.username());
             log.warn("Password: {}", bootstrap.password());
-            log.warn("Change it with POST {}/auth/password after login.", baseUrl);
+            log.warn("Open WebUI login page, then change the password before using admin APIs.");
         } else if (bootstrap.firstLogin()) {
             log.warn("Default admin user already exists and still uses the first-login password.");
             log.warn("The password was printed only during first startup and will not be shown again.");
-            log.warn("Login as '{}' with the saved password, then change it with POST {}/auth/password.", bootstrap.username(), baseUrl);
+            log.warn("Open {} and login as '{}' with the saved password, then change it.", webuiUrl, bootstrap.username());
             log.warn("Other admin APIs are blocked until the password is changed.");
         } else {
             log.info("Admin user table already initialized. Login with an existing admin user.");
@@ -60,9 +62,16 @@ public class StartupGuideLogger {
             log.info("Legacy X-Admin-Token authentication is enabled from KIRO_ADMIN_TOKEN.");
         }
 
-        log.info("Quick login:");
-        log.info("curl -X POST {}/auth/login -H 'Content-Type: application/json' -d '{{\"username\":\"admin\",\"password\":\"<password>\"}}'", baseUrl);
-        log.info("Use response data.accessToken as: Authorization: Bearer <token>");
+        log.info("Open WebUI login page: {}", webuiUrl);
+        log.info("API login is also available at POST {}/auth/login", baseUrl);
         log.info("------------------------------------------------------------");
+    }
+
+    private String webuiUrl(String baseUrl) {
+        String configured = properties.getWebuiUrl();
+        if (configured != null && !configured.isBlank()) {
+            return configured;
+        }
+        return baseUrl + "/#/login";
     }
 }

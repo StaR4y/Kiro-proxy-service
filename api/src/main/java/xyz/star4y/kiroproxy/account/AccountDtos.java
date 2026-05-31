@@ -53,6 +53,15 @@ public final class AccountDtos {
     ) {
     }
 
+    public record TestAccountsRequest(
+        List<String> accountIds,
+        Boolean onlyEnabled,
+        String model,
+        String prompt,
+        Integer maxConcurrency
+    ) {
+    }
+
     public record ImportAccountsRequest(
         @NotEmpty List<@Valid CreateAccountRequest> accounts,
         Boolean upsert
@@ -76,6 +85,30 @@ public final class AccountDtos {
         String status,
         String message,
         AccountResponse account
+    ) {
+    }
+
+    public record TestAccountsResponse(
+        Integer total,
+        Integer success,
+        Integer failed,
+        Integer skipped,
+        Instant startedAt,
+        Instant finishedAt,
+        List<TestAccountItemResponse> items
+    ) {
+    }
+
+    public record TestAccountItemResponse(
+        String accountId,
+        String email,
+        String status,
+        String message,
+        String detail,
+        Integer statusCode,
+        Long latencyMs,
+        Instant testedAt,
+        String model
     ) {
     }
 

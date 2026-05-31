@@ -11,6 +11,9 @@ import xyz.star4y.kiroproxy.account.ProxyAccountEntity;
 @Component
 public class KiroPayloadFactory {
 
+    private static final String BUILDER_ID_PROFILE_ARN = "arn:aws:codewhisperer:us-east-1:638616132270:profile/AAAACCCCXXXX";
+    private static final String SOCIAL_PROFILE_ARN = "arn:aws:codewhisperer:us-east-1:699475941385:profile/EHGA3GRVQMUK";
+
     private final ObjectMapper objectMapper;
 
     public KiroPayloadFactory(ObjectMapper objectMapper) {
@@ -54,9 +57,7 @@ public class KiroPayloadFactory {
         if (!inferenceConfig.isEmpty()) {
             payload.set("inferenceConfig", inferenceConfig);
         }
-        if (account.getProfileArn() != null && !account.getProfileArn().isBlank()) {
-            payload.put("profileArn", account.getProfileArn());
-        }
+        payload.put("profileArn", profileArn(account));
         if (request.has("thinking")) {
             ObjectNode additional = payload.putObject("additionalModelRequestFields");
             additional.set("thinking", request.get("thinking"));
@@ -137,5 +138,16 @@ public class KiroPayloadFactory {
             }
         }
         return null;
+    }
+
+    private String profileArn(ProxyAccountEntity account) {
+        if (account.getProfileArn() != null && !account.getProfileArn().isBlank()) {
+            return account.getProfileArn();
+        }
+        String provider = account.getProvider();
+        if ("Github".equalsIgnoreCase(provider) || "Google".equalsIgnoreCase(provider)) {
+            return SOCIAL_PROFILE_ARN;
+        }
+        return BUILDER_ID_PROFILE_ARN;
     }
 }

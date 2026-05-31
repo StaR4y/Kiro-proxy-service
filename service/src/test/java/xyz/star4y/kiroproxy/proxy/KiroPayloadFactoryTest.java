@@ -38,4 +38,23 @@ class KiroPayloadFactoryTest {
             .isEqualTo("claude-sonnet-4.5");
         assertThat(payload.path("inferenceConfig").path("maxTokens").asInt()).isEqualTo(128);
     }
+
+    @Test
+    void usesDefaultProfileArnWhenAccountDoesNotProvideOne() throws Exception {
+        JsonNode request = objectMapper.readTree("""
+            {
+              "model": "simple-task",
+              "messages": [
+                {"role": "user", "content": "ping"}
+              ]
+            }
+            """);
+        ProxyAccountEntity account = new ProxyAccountEntity();
+        account.setProvider("BuilderId");
+
+        ObjectNode payload = factory.fromOpenAiChat(request, account, "simple-task", "AI_EDITOR", "session-1");
+
+        assertThat(payload.path("profileArn").asText())
+            .isEqualTo("arn:aws:codewhisperer:us-east-1:638616132270:profile/AAAACCCCXXXX");
+    }
 }

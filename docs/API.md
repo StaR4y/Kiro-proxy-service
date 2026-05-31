@@ -25,11 +25,11 @@ Proxy APIs require an API key unless `KIRO_ALLOW_ANONYMOUS_PROXY=true`.
 Use either header:
 
 ```http
-Authorization: Bearer sk-kiro-...
+Authorization: Bearer sk-...
 ```
 
 ```http
-X-Api-Key: sk-kiro-...
+X-Api-Key: sk-...
 ```
 
 Admin APIs support two authentication modes.
@@ -126,11 +126,16 @@ Response:
     {
       "id": "claude-sonnet-4.5",
       "object": "model",
-      "created": 0,
-      "owned_by": "kiro",
+      "created": 1770000000,
+      "owned_by": "kiro-api",
       "name": "Claude Sonnet 4.5",
+      "modelName": "Claude Sonnet 4.5",
+      "description": "The latest Claude Sonnet model",
+      "supportedInputTypes": ["TEXT", "IMAGE"],
+      "maxInputTokens": 200000,
+      "maxOutputTokens": 64000,
       "context_length": 200000,
-      "max_output_tokens": 32000
+      "max_output_tokens": 64000
     }
   ]
 }
@@ -138,10 +143,20 @@ Response:
 
 Current static model IDs:
 
+- `auto`
 - `claude-sonnet-4.5`
 - `claude-sonnet-4`
 - `claude-haiku-4.5`
+- `claude-opus-4.5`
+- `claude-3.7-sonnet`
+- `simple-task`
+- `CLAUDE_SONNET_4_20250514_V1_0`
+- `CLAUDE_HAIKU_4_5_20251001_V1_0`
+- `CLAUDE_3_7_SONNET_20250219_V1_0`
 - `gpt-4o`
+- `gpt-4`
+- `gpt-4-turbo`
+- `gpt-3.5-turbo`
 
 ### Chat Completions
 
@@ -246,7 +261,7 @@ curl example:
 ```bash
 curl -X POST http://127.0.0.1:8080/v1/chat/completions \
   -H 'Content-Type: application/json' \
-  -H 'Authorization: Bearer sk-kiro-REPLACE_ME' \
+  -H 'Authorization: Bearer sk-REPLACE_ME' \
   -d '{
     "model": "gpt-4o",
     "messages": [
@@ -486,26 +501,41 @@ Notes:
 POST /admin/accounts/import
 ```
 
+Kiro Account Manager export format is accepted directly. The parser reads
+`accounts[].credentials.*`, `id`, `idp`, `machineId`, `profileArn`, and
+`usage.limit`.
+
 Request:
 
 ```json
 {
+  "version": "kiro-account-manager",
+  "exportedAt": 1760000000000,
   "upsert": true,
   "accounts": [
     {
-      "accountId": "kiro-main",
+      "id": "kiro-main",
       "email": "user@example.com",
-      "accessToken": "kiro-access-token",
-      "refreshToken": "optional-refresh-token",
-      "region": "us-east-1",
-      "authMethod": "idc",
-      "provider": "BuilderID",
+      "idp": "BuilderId",
       "profileArn": "arn:aws:codewhisperer:us-east-1:638616132270:profile/AAAACCCCXXXX",
       "machineId": "optional-machine-id",
       "proxyUrl": "http://user:pass@host:port",
-      "quotaLimit": 1000000
+      "credentials": {
+        "accessToken": "kiro-access-token",
+        "refreshToken": "optional-refresh-token",
+        "clientId": "optional-client-id",
+        "clientSecret": "optional-client-secret",
+        "region": "us-east-1",
+        "authMethod": "IdC",
+        "provider": "BuilderId"
+      },
+      "usage": {
+        "limit": 1000000
+      }
     }
-  ]
+  ],
+  "groups": [],
+  "tags": []
 }
 ```
 
@@ -536,9 +566,11 @@ Response:
 
 Import behavior:
 
+- The endpoint also accepts the legacy service format `{"accounts":[{"accountId":"...","accessToken":"..."}]}` and a raw account array.
 - `upsert=false` or omitted skips duplicate `accountId` entries.
 - `upsert=true` updates existing rows with the same `accountId`.
-- Missing `accountId` creates a new generated account ID.
+- Kiro Account Manager `id` is treated as `accountId`. Missing `id/accountId` creates a new generated account ID.
+- `credentials.accessToken` or top-level `accessToken` is required for import. Accounts with refresh credentials are refreshed in the background every hour by default; if Kiro still returns `403` with an invalid bearer token, the service refreshes once immediately and retries. IdC/BuilderId accounts also require `clientId` and `clientSecret`.
 - Each item returns `CREATED`, `UPDATED`, `SKIPPED`, or `FAILED`.
 
 ### Update Account
@@ -598,6 +630,54 @@ Clears:
 
 The account is set back to `enabled=true`.
 
+### Test Accounts
+
+```http
+POST /admin/accounts/test
+```
+
+Runs a lightweight upstream request against selected accounts. Omit `accountIds`
+to test all accounts.
+
+Request:
+
+```json
+{
+  "accountIds": ["kiro-main"],
+  "onlyEnabled": true,
+  "model": "simple-task",
+  "prompt": "Reply OK in one short sentence.",
+  "maxConcurrency": 3
+}
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "total": 1,
+    "success": 1,
+    "failed": 0,
+    "skipped": 0,
+    "items": [
+      {
+        "accountId": "kiro-main",
+        "email": "user@example.com",
+        "status": "SUCCESS",
+        "message": "OK",
+        "detail": "OK",
+        "statusCode": 200,
+        "latencyMs": 812,
+        "testedAt": "2026-05-31T08:00:00Z",
+        "model": "simple-task"
+      }
+    ]
+  }
+}
+```
+
 ### Delete Account
 
 ```http
@@ -635,8 +715,8 @@ Response:
   "data": {
     "keyId": "32-char-id",
     "name": "default",
-    "key": "sk-kiro-...",
-    "keyPrefix": "sk-kiro-...",
+    "key": "sk-...",
+    "keyPrefix": "sk-...",
     "enabled": true,
     "creditsLimit": 1000,
     "createdAt": "2026-05-30T15:00:00Z"

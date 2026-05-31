@@ -18,6 +18,7 @@ public final class KiroModelMapper {
         Map.entry("claude-3-opus", "claude-sonnet-4.5"),
         Map.entry("claude-3-sonnet", "claude-sonnet-4"),
         Map.entry("claude-3-haiku", "claude-haiku-4.5"),
+        Map.entry("simple-task", "claude-haiku-4.5"),
         Map.entry("gpt-4", "claude-sonnet-4.5"),
         Map.entry("gpt-4o", "claude-sonnet-4.5"),
         Map.entry("gpt-4-turbo", "claude-sonnet-4.5"),
@@ -33,7 +34,7 @@ public final class KiroModelMapper {
         }
         String trimmed = model.trim();
         String lower = trimmed.toLowerCase(Locale.ROOT);
-        if (lower.startsWith("claude") || lower.startsWith("gpt")) {
+        if (lower.startsWith("claude") || lower.startsWith("gpt") || lower.equals("simple-task")) {
             return MODEL_ID_MAP.getOrDefault(lower, trimmed);
         }
         return trimmed;

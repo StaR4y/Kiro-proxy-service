@@ -284,7 +284,7 @@ public class AccountPoolService {
             return Mono.just(importFailure(index, null, null, "Account item is null"));
         }
         if (request.accessToken() == null || request.accessToken().isBlank()) {
-            return Mono.just(importFailure(index, request.accountId(), request.email(), "accessToken is required"));
+            return Mono.just(importFailure(index, request.accountId(), request.email(), "accessToken or credentials.accessToken is required"));
         }
 
         String requestedAccountId = Optional.ofNullable(request.accountId()).filter(s -> !s.isBlank()).orElse(null);

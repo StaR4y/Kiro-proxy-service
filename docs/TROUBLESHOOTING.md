@@ -172,7 +172,7 @@ Use returned `data.key`:
 
 ```bash
 curl http://127.0.0.1:8080/v1/models \
-  -H 'Authorization: Bearer sk-kiro-...'
+  -H 'Authorization: Bearer sk-...'
 ```
 
 ## Proxy APIs Return `503 NO_AVAILABLE_ACCOUNT`

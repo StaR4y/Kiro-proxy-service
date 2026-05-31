@@ -9,6 +9,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class ProxyProperties {
 
     private String adminToken = "";
+    private String webuiUrl = "";
     private boolean allowAnonymousProxy;
     private Duration requestTimeout = Duration.ofSeconds(90);
     private Duration adminSessionTtl = Duration.ofHours(12);
@@ -34,6 +35,14 @@ public class ProxyProperties {
 
     public void setAdminToken(String adminToken) {
         this.adminToken = adminToken;
+    }
+
+    public String getWebuiUrl() {
+        return webuiUrl;
+    }
+
+    public void setWebuiUrl(String webuiUrl) {
+        this.webuiUrl = webuiUrl;
     }
 
     public boolean isAllowAnonymousProxy() {

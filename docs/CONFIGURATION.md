@@ -40,6 +40,7 @@ CREATE DATABASE IF NOT EXISTS kiro_proxy
 | Variable | Default | Description |
 | --- | --- | --- |
 | `KIRO_ADMIN_TOKEN` | empty | Optional legacy admin token for automation or emergency access. Local admin login is available even when this is empty. |
+| `KIRO_WEBUI_URL` | empty | WebUI login URL printed in startup logs. Empty defaults to `http://127.0.0.1:<port>/#/login`. |
 | `KIRO_ADMIN_SESSION_TTL` | `12h` | Local admin login session lifetime. |
 | `KIRO_ALLOW_ANONYMOUS_PROXY` | `false` | Allow proxy calls without API key. Keep `false` in production. |
 | `KIRO_REQUEST_TIMEOUT` | `90s` | Upstream Kiro request timeout. |
@@ -52,6 +53,8 @@ CREATE DATABASE IF NOT EXISTS kiro_proxy
 | `KIRO_QUOTA_RESET` | `1h` | Planned quota reset duration. |
 | `KIRO_PROBABILISTIC_RETRY` | `0.1` | Chance to probe a cooling account early. |
 | `KIRO_MAX_REQUEST_BODY_BYTES` | `10485760` | Max inbound request content length. |
+| `KIRO_TOKEN_REFRESH_INTERVAL_MS` | `3600000` | Background Kiro token refresh interval. Default is one hour. |
+| `KIRO_TOKEN_REFRESH_INITIAL_DELAY_MS` | `60000` | Delay before the first background token refresh after startup. |
 | `KIRO_PREFERRED_ENDPOINT` | `codewhisperer` | Preferred upstream endpoint: `codewhisperer`, `amazonq`, or `amazonq-cli`. |
 
 ## Recommended Local Environment
@@ -65,6 +68,7 @@ export MYSQL_USERNAME=root
 export MYSQL_PASSWORD=
 export MYSQL_POOL_INITIAL_SIZE=8
 export MYSQL_POOL_MAX_SIZE=80
+export KIRO_WEBUI_URL=http://127.0.0.1:5173/#/login
 export KIRO_ADMIN_SESSION_TTL=12h
 # Optional legacy token. Prefer POST /auth/login for normal operation.
 # export KIRO_ADMIN_TOKEN=change-me

@@ -1,5 +1,6 @@
 package xyz.star4y.kiroproxy.account;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -14,10 +15,19 @@ import xyz.star4y.kiroproxy.common.ApiResponse;
 public class AccountAdminController implements AccountAdminApi {
 
     private final AccountPoolService service;
+    private final AccountImportParser importParser;
+    private final AccountTestService testService;
     private final AdminAuth adminAuth;
 
-    public AccountAdminController(AccountPoolService service, AdminAuth adminAuth) {
+    public AccountAdminController(
+        AccountPoolService service,
+        AccountImportParser importParser,
+        AccountTestService testService,
+        AdminAuth adminAuth
+    ) {
         this.service = service;
+        this.importParser = importParser;
+        this.testService = testService;
         this.adminAuth = adminAuth;
     }
 
@@ -43,10 +53,10 @@ public class AccountAdminController implements AccountAdminApi {
     @Override
     public Mono<ApiResponse<AccountDtos.ImportAccountsResponse>> importBatch(
         ServerWebExchange exchange,
-        @Valid @RequestBody AccountDtos.ImportAccountsRequest request
+        @RequestBody JsonNode request
     ) {
         adminAuth.verify(exchange);
-        return service.importAccounts(request).map(ApiResponse::ok);
+        return service.importAccounts(importParser.parse(request)).map(ApiResponse::ok);
     }
 
     @Override
@@ -79,6 +89,15 @@ public class AccountAdminController implements AccountAdminApi {
         return service.resetState(accountId)
             .map(AccountMapper::toResponse)
             .map(ApiResponse::ok);
+    }
+
+    @Override
+    public Mono<ApiResponse<AccountDtos.TestAccountsResponse>> test(
+        ServerWebExchange exchange,
+        @RequestBody AccountDtos.TestAccountsRequest request
+    ) {
+        adminAuth.verify(exchange);
+        return testService.test(request).map(ApiResponse::ok);
     }
 
     @Override
