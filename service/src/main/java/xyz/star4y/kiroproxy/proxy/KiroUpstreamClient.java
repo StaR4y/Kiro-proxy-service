@@ -91,9 +91,10 @@ public class KiroUpstreamClient {
                     .exchangeToMono(response -> handleResponse(response, requestBytes, model, endpoint));
             })
             .onErrorResume(error -> {
-                if (!refreshed && isInvalidBearerToken(error)) {
+                if (!refreshed && isInvalidBearerToken(error) && tokenRefreshService.canRefresh(account)) {
                     return tokenRefreshService.refresh(account)
-                        .flatMap(refreshedAccount -> callFirstEndpoint(refreshedAccount, payload, model, true));
+                        .flatMap(refreshedAccount -> callFirstEndpoint(refreshedAccount, payload, model, true))
+                        .onErrorResume(refreshError -> Mono.error(error));
                 }
                 if (index + 1 < endpoints.size() && isRecoverable(error)) {
                     return callEndpoint(account, payload, model, endpoints, index + 1, refreshed);

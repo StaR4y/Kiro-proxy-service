@@ -118,7 +118,7 @@ public class AccountTokenRefreshService {
         return refreshed.flatMap(result -> saveRefreshedToken(account, result));
     }
 
-    private boolean canRefresh(ProxyAccountEntity account) {
+    public boolean canRefresh(ProxyAccountEntity account) {
         if (clean(account.getRefreshToken()) == null) {
             return false;
         }

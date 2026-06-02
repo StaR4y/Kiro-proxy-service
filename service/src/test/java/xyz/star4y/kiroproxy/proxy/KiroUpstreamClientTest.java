@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -82,6 +84,7 @@ class KiroUpstreamClientTest {
         ProxyAccountEntity account = account("old-access");
         ProxyAccountEntity refreshed = account("new-access");
 
+        when(refreshService.canRefresh(account)).thenReturn(true);
         when(refreshService.refresh(account)).thenReturn(Mono.just(refreshed));
         when(parser.parse(any(byte[].class), eq("auto"), any(byte[].class)))
             .thenReturn(new KiroCompletionResult("OK", KiroUsage.zero()));
@@ -99,6 +102,36 @@ class KiroUpstreamClientTest {
         assertThat(result.content()).isEqualTo("OK");
         assertThat(calls).hasValue(2);
         assertThat(retryAuthorization).hasValue("Bearer new-access");
+    }
+
+    @Test
+    void doesNotRefreshInvalidBearerTokenWhenAccountCannotRefresh() {
+        ExchangeFunction exchange = request -> Mono.just(ClientResponse.create(HttpStatus.FORBIDDEN)
+            .header("Content-Type", "application/json")
+            .body("""
+                {"message":"The bearer token included in the request is invalid.","reason":null}
+                """)
+            .build());
+        AwsEventStreamParser parser = mock(AwsEventStreamParser.class);
+        AccountTokenRefreshService refreshService = mock(AccountTokenRefreshService.class);
+        ProxyAccountEntity account = account("old-access");
+
+        when(refreshService.canRefresh(account)).thenReturn(false);
+
+        KiroUpstreamClient client = new KiroUpstreamClient(
+            WebClient.builder().exchangeFunction(exchange).build(),
+            properties(endpoint("amazonq", "AI_EDITOR")),
+            parser,
+            refreshService
+        );
+
+        Throwable failure = org.assertj.core.api.Assertions.catchThrowable(() ->
+            client.complete(account, payload("auto", "AI_EDITOR"), "auto").block()
+        );
+
+        assertThat(failure).isInstanceOf(UpstreamException.class);
+        assertThat(failure.getMessage()).contains("bearer token").contains("invalid");
+        verify(refreshService, never()).refresh(account);
     }
 
     private ObjectNode payload(String modelId, String origin) {

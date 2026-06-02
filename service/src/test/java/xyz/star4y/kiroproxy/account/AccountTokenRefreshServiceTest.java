@@ -68,8 +68,12 @@ class AccountTokenRefreshServiceTest {
         ProxyAccountEntity missingRefresh = account();
         missingRefresh.setAccountId("missing-refresh");
         missingRefresh.setRefreshToken(null);
+        ProxyAccountEntity missingCredentials = account();
+        missingCredentials.setAccountId("missing-credentials");
+        missingCredentials.setClientId(null);
+        missingCredentials.setClientSecret(null);
 
-        when(repository.findAllByEnabledTrue()).thenReturn(Flux.just(eligible, missingRefresh));
+        when(repository.findAllByEnabledTrue()).thenReturn(Flux.just(eligible, missingRefresh, missingCredentials));
         when(repository.findByAccountId("kiro-main")).thenReturn(Mono.just(eligible));
         when(repository.save(eligible)).thenReturn(Mono.just(eligible));
         when(accountPoolService.refreshCache()).thenReturn(Mono.empty());
@@ -84,11 +88,33 @@ class AccountTokenRefreshServiceTest {
         AccountTokenRefreshService.TokenRefreshSummary summary = service.refreshEligibleAccounts().block();
 
         assertThat(summary).isNotNull();
-        assertThat(summary.total()).isEqualTo(2);
+        assertThat(summary.total()).isEqualTo(3);
         assertThat(summary.eligible()).isEqualTo(1);
         assertThat(summary.refreshed()).isEqualTo(1);
         assertThat(summary.failed()).isZero();
         assertThat(eligible.getAccessToken()).isEqualTo("new-access");
+    }
+
+    @Test
+    void reportsWhetherAccountCanRefresh() {
+        AccountTokenRefreshService service = new AccountTokenRefreshService(
+            new ObjectMapper(),
+            WebClient.builder().exchangeFunction(request -> Mono.empty()).build(),
+            mock(ProxyAccountRepository.class),
+            mock(AccountPoolService.class)
+        );
+        ProxyAccountEntity oidc = account();
+        ProxyAccountEntity missingCredentials = account();
+        missingCredentials.setClientId(null);
+        missingCredentials.setClientSecret(null);
+        ProxyAccountEntity social = account();
+        social.setAuthMethod("social");
+        social.setClientId(null);
+        social.setClientSecret(null);
+
+        assertThat(service.canRefresh(oidc)).isTrue();
+        assertThat(service.canRefresh(missingCredentials)).isFalse();
+        assertThat(service.canRefresh(social)).isTrue();
     }
 
     private ProxyAccountEntity account() {
