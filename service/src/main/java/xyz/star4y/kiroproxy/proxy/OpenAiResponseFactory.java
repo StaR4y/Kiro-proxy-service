@@ -61,14 +61,36 @@ public class OpenAiResponseFactory {
             root.put("previous_response_id", previousResponseId);
         }
         ArrayNode output = root.putArray("output");
-        ObjectNode item = output.addObject();
-        item.put("type", "message");
-        item.put("id", "msg-" + UUID.randomUUID());
-        item.put("role", "assistant");
-        ArrayNode content = item.putArray("content");
-        ObjectNode text = content.addObject();
-        text.put("type", "output_text");
-        text.put("text", result.content());
+        if (result.toolUses().isEmpty()) {
+            ObjectNode item = output.addObject();
+            item.put("type", "message");
+            item.put("id", "msg-" + UUID.randomUUID());
+            item.put("role", "assistant");
+            ArrayNode content = item.putArray("content");
+            ObjectNode text = content.addObject();
+            text.put("type", "output_text");
+            text.put("text", result.content());
+        } else {
+            if (!result.content().isBlank()) {
+                ObjectNode item = output.addObject();
+                item.put("type", "message");
+                item.put("id", "msg-" + UUID.randomUUID());
+                item.put("role", "assistant");
+                ArrayNode content = item.putArray("content");
+                ObjectNode text = content.addObject();
+                text.put("type", "output_text");
+                text.put("text", result.content());
+            }
+            for (KiroToolUse toolUse : result.toolUses()) {
+                ObjectNode call = output.addObject();
+                call.put("type", "function_call");
+                call.put("id", "fc-" + UUID.randomUUID());
+                call.put("call_id", toolUse.id());
+                call.put("name", toolUse.name());
+                call.put("arguments", toolUse.input().toString());
+                call.put("status", "completed");
+            }
+        }
         appendUsage(root, result.usage(), "input_tokens", "output_tokens");
         return root;
     }
@@ -98,6 +120,9 @@ public class OpenAiResponseFactory {
     }
 
     public Flux<ServerSentEvent<String>> chatStreamEvents(String model, KiroCompletionResult result) {
+        if (!result.toolUses().isEmpty()) {
+            return chatToolStreamEvents(model, result);
+        }
         return Flux.just(
             ServerSentEvent.builder(chatStreamChunkBody(model, result.content()).toString()).build(),
             ServerSentEvent.builder(chatStreamStopBody(model).toString()).build(),
@@ -122,6 +147,10 @@ public class OpenAiResponseFactory {
     }
 
     private ObjectNode chatStreamStopBody(String model) {
+        return chatStreamStopBody(model, "stop");
+    }
+
+    private ObjectNode chatStreamStopBody(String model, String finishReason) {
         ObjectNode root = objectMapper.createObjectNode();
         root.put("id", "chatcmpl-" + UUID.randomUUID());
         root.put("object", "chat.completion.chunk");
@@ -131,7 +160,43 @@ public class OpenAiResponseFactory {
         ObjectNode choice = choices.addObject();
         choice.put("index", 0);
         choice.putObject("delta");
-        choice.put("finish_reason", "stop");
+        choice.put("finish_reason", finishReason);
+        return root;
+    }
+
+    private Flux<ServerSentEvent<String>> chatToolStreamEvents(String model, KiroCompletionResult result) {
+        List<ServerSentEvent<String>> events = new ArrayList<>();
+        String content = result.content();
+        if (!content.isBlank()) {
+            events.add(ServerSentEvent.builder(chatStreamChunkBody(model, content).toString()).build());
+        }
+        for (int i = 0; i < result.toolUses().size(); i++) {
+            events.add(ServerSentEvent.builder(chatToolCallChunkBody(model, i, result.toolUses().get(i)).toString()).build());
+        }
+        events.add(ServerSentEvent.builder(chatStreamStopBody(model, "tool_calls").toString()).build());
+        events.add(ServerSentEvent.builder("[DONE]").build());
+        return Flux.fromIterable(events);
+    }
+
+    private ObjectNode chatToolCallChunkBody(String model, int index, KiroToolUse toolUse) {
+        ObjectNode root = objectMapper.createObjectNode();
+        root.put("id", "chatcmpl-" + UUID.randomUUID());
+        root.put("object", "chat.completion.chunk");
+        root.put("created", Instant.now().getEpochSecond());
+        root.put("model", model);
+        ArrayNode choices = root.putArray("choices");
+        ObjectNode choice = choices.addObject();
+        choice.put("index", 0);
+        ObjectNode delta = choice.putObject("delta");
+        ArrayNode toolCalls = delta.putArray("tool_calls");
+        ObjectNode call = toolCalls.addObject();
+        call.put("index", index);
+        call.put("id", toolUse.id());
+        call.put("type", "function");
+        ObjectNode function = call.putObject("function");
+        function.put("name", toolUse.name());
+        function.put("arguments", toolUse.input().toString());
+        choice.putNull("finish_reason");
         return root;
     }
 

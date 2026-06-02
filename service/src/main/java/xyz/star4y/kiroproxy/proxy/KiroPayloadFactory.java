@@ -71,6 +71,7 @@ public class KiroPayloadFactory {
         if ("assistant".equals(role)) {
             ObjectNode assistant = node.putObject("assistantResponseMessage");
             assistant.put("content", contentToText(message.path("content")));
+            appendToolUses(assistant, message.path("tool_calls"));
         } else if ("user".equals(role) || "system".equals(role) || "tool".equals(role)) {
             node.set("userInputMessage", userInput(message, model, origin, null));
         }
@@ -85,21 +86,58 @@ public class KiroPayloadFactory {
         userInput.put("origin", origin);
         if (tools != null && tools.isArray() && !tools.isEmpty()) {
             ObjectNode context = userInput.putObject("userInputMessageContext");
-            ArrayNode kiroTools = context.putArray("tools");
-            for (JsonNode tool : tools) {
-                JsonNode function = tool.path("function");
-                if (function.isMissingNode()) {
-                    continue;
-                }
-                ObjectNode wrapper = kiroTools.addObject();
-                ObjectNode spec = wrapper.putObject("toolSpecification");
-                spec.put("name", function.path("name").asText());
-                spec.put("description", function.path("description").asText(""));
-                ObjectNode inputSchema = spec.putObject("inputSchema");
-                inputSchema.set("json", function.path("parameters"));
-            }
+            appendTools(context, tools);
+        }
+        if (message != null && "tool".equals(message.path("role").asText())) {
+            ObjectNode context = userInput.has("userInputMessageContext")
+                ? (ObjectNode) userInput.path("userInputMessageContext")
+                : userInput.putObject("userInputMessageContext");
+            appendToolResult(context, message);
         }
         return userInput;
+    }
+
+    private void appendTools(ObjectNode context, JsonNode tools) {
+        ArrayNode kiroTools = context.putArray("tools");
+        for (JsonNode tool : tools) {
+            JsonNode function = tool.path("function");
+            if (function.isMissingNode()) {
+                continue;
+            }
+            ObjectNode wrapper = kiroTools.addObject();
+            ObjectNode spec = wrapper.putObject("toolSpecification");
+            spec.put("name", function.path("name").asText());
+            spec.put("description", function.path("description").asText(""));
+            ObjectNode inputSchema = spec.putObject("inputSchema");
+            inputSchema.set("json", function.path("parameters"));
+        }
+    }
+
+    private void appendToolUses(ObjectNode assistant, JsonNode toolCalls) {
+        if (!toolCalls.isArray() || toolCalls.isEmpty()) {
+            return;
+        }
+        ArrayNode toolUses = assistant.putArray("toolUses");
+        for (JsonNode toolCall : toolCalls) {
+            JsonNode function = toolCall.path("function");
+            if (function.isMissingNode()) {
+                continue;
+            }
+            ObjectNode toolUse = toolUses.addObject();
+            toolUse.put("toolUseId", toolCall.path("id").asText());
+            toolUse.put("name", function.path("name").asText());
+            toolUse.put("input", function.path("arguments").asText("{}"));
+        }
+    }
+
+    private void appendToolResult(ObjectNode context, JsonNode message) {
+        ArrayNode toolResults = context.putArray("toolResults");
+        ObjectNode result = toolResults.addObject();
+        result.put("toolUseId", message.path("tool_call_id").asText());
+        ArrayNode content = result.putArray("content");
+        ObjectNode text = content.addObject();
+        text.put("text", contentToText(message.path("content")));
+        result.put("status", "success");
     }
 
     private String contentToText(JsonNode content) {

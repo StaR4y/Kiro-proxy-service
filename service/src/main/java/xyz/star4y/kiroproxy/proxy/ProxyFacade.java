@@ -242,6 +242,8 @@ public class ProxyFacade {
         if (request.has("top_p")) chat.set("top_p", request.get("top_p"));
         if (request.has("max_output_tokens")) chat.set("max_tokens", request.get("max_output_tokens"));
         if (request.has("stream")) chat.set("stream", request.get("stream"));
+        if (request.has("tools")) chat.set("tools", responsesToolsToOpenAi(request.path("tools")));
+        if (request.has("tool_choice")) chat.set("tool_choice", request.get("tool_choice"));
         ArrayNode messages = chat.putArray("messages");
         if (request.hasNonNull("instructions")) {
             ObjectNode system = messages.addObject();
@@ -255,9 +257,7 @@ public class ProxyFacade {
             user.put("content", input.asText());
         } else if (input.isArray()) {
             for (JsonNode item : input) {
-                ObjectNode message = messages.addObject();
-                message.put("role", item.path("role").asText("user"));
-                message.set("content", normalizeResponsesContent(item.path("content")));
+                appendResponsesInputItem(messages, item);
             }
         }
         return chat;
@@ -279,16 +279,139 @@ public class ProxyFacade {
         JsonNode inputMessages = request.path("messages");
         if (inputMessages.isArray()) {
             for (JsonNode item : inputMessages) {
-                ObjectNode message = messages.addObject();
-                String role = item.path("role").asText("user");
-                message.put("role", "assistant".equals(role) ? "assistant" : "user");
-                message.put("content", anthropicContentText(item.path("content")));
+                appendAnthropicMessage(messages, item);
             }
         }
         if (request.path("tools").isArray() && !request.path("tools").isEmpty()) {
             chat.set("tools", anthropicToolsToOpenAi(request.path("tools")));
         }
+        if (request.has("tool_choice")) {
+            chat.set("tool_choice", request.get("tool_choice"));
+        }
         return chat;
+    }
+
+    private void appendAnthropicMessage(ArrayNode messages, JsonNode item) {
+        String role = item.path("role").asText("user");
+        JsonNode content = item.path("content");
+        if (!content.isArray()) {
+            ObjectNode message = messages.addObject();
+            message.put("role", "assistant".equals(role) ? "assistant" : "user");
+            message.put("content", anthropicContentText(content));
+            return;
+        }
+        if ("assistant".equals(role) && hasAnthropicContentType(content, "tool_use")) {
+            ObjectNode message = messages.addObject();
+            message.put("role", "assistant");
+            message.put("content", anthropicContentText(content));
+            ArrayNode toolCalls = message.putArray("tool_calls");
+            for (JsonNode part : content) {
+                if (!"tool_use".equals(part.path("type").asText())) {
+                    continue;
+                }
+                ObjectNode call = toolCalls.addObject();
+                call.put("id", part.path("id").asText());
+                call.put("type", "function");
+                ObjectNode function = call.putObject("function");
+                function.put("name", part.path("name").asText());
+                function.put("arguments", part.path("input").toString());
+            }
+            return;
+        }
+        if (!"assistant".equals(role) && hasAnthropicContentType(content, "tool_result")) {
+            for (JsonNode part : content) {
+                if (!"tool_result".equals(part.path("type").asText())) {
+                    continue;
+                }
+                ObjectNode message = messages.addObject();
+                message.put("role", "tool");
+                message.put("tool_call_id", part.path("tool_use_id").asText());
+                message.put("content", anthropicToolResultText(part));
+            }
+            String text = anthropicTextOnly(content);
+            if (!text.isBlank()) {
+                ObjectNode message = messages.addObject();
+                message.put("role", "user");
+                message.put("content", text);
+            }
+            return;
+        }
+        ObjectNode message = messages.addObject();
+        message.put("role", "assistant".equals(role) ? "assistant" : "user");
+        message.put("content", anthropicContentText(content));
+    }
+
+    private boolean hasAnthropicContentType(JsonNode content, String type) {
+        for (JsonNode part : content) {
+            if (type.equals(part.path("type").asText())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String anthropicTextOnly(JsonNode content) {
+        StringBuilder builder = new StringBuilder();
+        for (JsonNode part : content) {
+            if ("text".equals(part.path("type").asText())) {
+                if (!builder.isEmpty()) builder.append("\n");
+                builder.append(part.path("text").asText(""));
+            }
+        }
+        return builder.toString();
+    }
+
+    private void appendResponsesInputItem(ArrayNode messages, JsonNode item) {
+        String type = item.path("type").asText("");
+        if ("function_call".equals(type)) {
+            ObjectNode message = messages.addObject();
+            message.put("role", "assistant");
+            message.put("content", "");
+            ArrayNode toolCalls = message.putArray("tool_calls");
+            ObjectNode call = toolCalls.addObject();
+            call.put("id", item.path("call_id").asText(item.path("id").asText()));
+            call.put("type", "function");
+            ObjectNode function = call.putObject("function");
+            function.put("name", item.path("name").asText());
+            function.put("arguments", item.path("arguments").asText("{}"));
+            return;
+        }
+        if ("function_call_output".equals(type)) {
+            ObjectNode message = messages.addObject();
+            message.put("role", "tool");
+            message.put("tool_call_id", item.path("call_id").asText());
+            message.put("content", item.path("output").asText(""));
+            return;
+        }
+        ObjectNode message = messages.addObject();
+        message.put("role", item.path("role").asText("user"));
+        message.set("content", normalizeResponsesContent(item.path("content")));
+        if (item.has("tool_call_id")) {
+            message.set("tool_call_id", item.get("tool_call_id"));
+        }
+    }
+
+    private ArrayNode responsesToolsToOpenAi(JsonNode tools) {
+        ArrayNode converted = objectMapper.createArrayNode();
+        if (!tools.isArray()) {
+            return converted;
+        }
+        for (JsonNode tool : tools) {
+            if ("function".equals(tool.path("type").asText()) && tool.has("function")) {
+                converted.add(tool);
+                continue;
+            }
+            ObjectNode wrapper = converted.addObject();
+            wrapper.put("type", "function");
+            ObjectNode function = wrapper.putObject("function");
+            function.put("name", tool.path("name").asText(tool.path("function").path("name").asText()));
+            function.put("description", tool.path("description").asText(tool.path("function").path("description").asText("")));
+            JsonNode parameters = tool.has("parameters")
+                ? tool.path("parameters")
+                : tool.path("function").path("parameters");
+            function.set("parameters", parameters);
+        }
+        return converted;
     }
 
     private JsonNode normalizeResponsesContent(JsonNode content) {
