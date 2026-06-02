@@ -64,12 +64,15 @@ MYSQL_PASSWORD=replace-with-strong-db-password
 Recommended defaults:
 
 ```dotenv
+MYSQL_IMAGE=mysql:8.0.37-oraclelinux8
 HOST_HTTP_PORT=18080
 KIRO_ALLOW_ANONYMOUS_PROXY=false
 KIRO_ADMIN_SESSION_TTL=12h
 KIRO_RATE_LIMIT_PER_MINUTE=120
 KIRO_WEBUI_URL=https://your-domain.example/#/login
 ```
+
+`MYSQL_IMAGE=mysql:8.0.37-oraclelinux8` rolls MySQL back to an Oracle Linux 8 image and avoids `Fatal glibc error: CPU does not support x86-64-v2` on older VPS CPUs.
 
 Do not enable `KIRO_ALLOW_ANONYMOUS_PROXY=true` on a public service.
 

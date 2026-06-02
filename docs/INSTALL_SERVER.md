@@ -34,6 +34,8 @@ The installer will:
 - wait for `/actuator/health`
 - print recent logs so the first admin password can be saved
 
+The default MySQL image is pinned to `mysql:8.0.37-oraclelinux8` for older x86-64 servers that do not support `x86-64-v2`. You can override it in `.env` with `MYSQL_IMAGE=...`.
+
 ## Configuration Variables
 
 Set variables before running the installer:
@@ -58,6 +60,26 @@ Supported variables:
 | `PUBLIC_BASE_URL` | empty | Public HTTPS URL used in startup logs |
 | `FORCE_ENV` | `false` | Regenerate `.env` even if it already exists |
 | `INSTALL_DOCKER` | `true` | Install Docker when missing |
+
+## MySQL Image Compatibility
+
+If the MySQL container logs show:
+
+```text
+Fatal glibc error: CPU does not support x86-64-v2
+```
+
+Roll MySQL back to the Oracle Linux 8 image:
+
+```bash
+cd /opt/kiro-proxy-service
+grep -q '^MYSQL_IMAGE=' .env \
+  && sed -i 's|^MYSQL_IMAGE=.*|MYSQL_IMAGE=mysql:8.0.37-oraclelinux8|' .env \
+  || echo 'MYSQL_IMAGE=mysql:8.0.37-oraclelinux8' >> .env
+docker compose pull mysql
+docker compose up -d --force-recreate mysql
+docker compose up -d --build service
+```
 
 ## 1Panel Reverse Proxy
 

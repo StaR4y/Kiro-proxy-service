@@ -73,6 +73,27 @@ mysql -uroot -e "DROP DATABASE IF EXISTS kiro_proxy; CREATE DATABASE kiro_proxy 
 
 Do not drop a production database.
 
+## MySQL Container Logs `CPU does not support x86-64-v2`
+
+Cause:
+
+Some newer MySQL Docker tags are based on Oracle Linux 9, whose glibc requires the `x86-64-v2` CPU baseline. Older VPS CPUs cannot run those containers.
+
+Fix the compose deployment by rolling MySQL back to the Oracle Linux 8 image:
+
+```bash
+cd /opt/kiro-proxy-service
+grep -q '^MYSQL_IMAGE=' .env \
+  && sed -i 's|^MYSQL_IMAGE=.*|MYSQL_IMAGE=mysql:8.0.37-oraclelinux8|' .env \
+  || echo 'MYSQL_IMAGE=mysql:8.0.37-oraclelinux8' >> .env
+docker compose pull mysql
+docker compose up -d --force-recreate mysql
+docker compose up -d --build service
+docker compose logs -f mysql
+```
+
+The default project compose file already uses this compatible MySQL 8.0 image.
+
 ## `Port 8080 was already in use`
 
 Check the process:

@@ -165,6 +165,7 @@ SERVER_PORT=${SERVER_PORT}
 HOST_HTTP_PORT=${HOST_HTTP_PORT}
 
 MYSQL_ROOT_PASSWORD=$(random_secret)
+MYSQL_IMAGE=mysql:8.0.37-oraclelinux8
 MYSQL_DATABASE=kiro_proxy
 MYSQL_USERNAME=kiro_proxy
 MYSQL_PASSWORD=$(random_secret)
