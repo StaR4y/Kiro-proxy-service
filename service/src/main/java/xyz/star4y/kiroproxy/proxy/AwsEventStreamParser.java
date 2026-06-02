@@ -7,6 +7,8 @@ import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -20,6 +22,7 @@ public class AwsEventStreamParser {
 
     public KiroCompletionResult parse(byte[] bytes, String fallbackModel, byte[] requestPayload) {
         StringBuilder content = new StringBuilder();
+        ToolUseAccumulator toolUses = new ToolUseAccumulator();
         UsageAccumulator usage = new UsageAccumulator(estimateTokens(requestPayload), 0, BigDecimal.ZERO, 0, 0, 0);
         int offset = 0;
         while (offset + 16 <= bytes.length) {
@@ -30,11 +33,13 @@ public class AwsEventStreamParser {
             }
             int payloadStart = offset + 12 + headersLength;
             int payloadEnd = offset + totalLength - 4;
+            String eventType = extractEventType(bytes, offset + 12, headersLength);
             if (payloadStart >= 12 && payloadStart < payloadEnd && payloadEnd <= bytes.length) {
-                parsePayload(bytes, payloadStart, payloadEnd, content, usage, fallbackModel);
+                parsePayload(bytes, payloadStart, payloadEnd, content, toolUses, usage, fallbackModel, eventType);
             }
             offset += totalLength;
         }
+        toolUses.finish();
         if (content.isEmpty()) {
             String text = new String(bytes, StandardCharsets.UTF_8);
             JsonNode maybeJson = readJsonOrNull(text);
@@ -46,7 +51,10 @@ public class AwsEventStreamParser {
         if (usage.outputTokens == 0 && !content.isEmpty()) {
             usage.outputTokens = estimateTokens(content.toString().getBytes(StandardCharsets.UTF_8));
         }
-        return new KiroCompletionResult(content.toString(), usage.toUsage());
+        if (usage.outputTokens == 0 && !toolUses.items().isEmpty()) {
+            usage.outputTokens = Math.max(1, toolUses.items().size());
+        }
+        return new KiroCompletionResult(content.toString(), toolUses.items(), usage.toUsage());
     }
 
     private void parsePayload(
@@ -54,27 +62,66 @@ public class AwsEventStreamParser {
         int payloadStart,
         int payloadEnd,
         StringBuilder content,
+        ToolUseAccumulator toolUses,
         UsageAccumulator usage,
-        String fallbackModel
+        String fallbackModel,
+        String eventType
     ) {
         String payloadText = new String(bytes, payloadStart, payloadEnd - payloadStart, StandardCharsets.UTF_8);
         JsonNode json = readJsonOrNull(payloadText);
         if (json == null) {
             return;
         }
-        extractContent(json, content);
-        extractUsage(json, usage, fallbackModel);
+        extractContent(json, content, eventType);
+        extractToolUse(json, toolUses, eventType);
+        extractUsage(json, usage, fallbackModel, eventType);
     }
 
     private void extractContent(JsonNode event, StringBuilder content) {
+        extractContent(event, content, "");
+    }
+
+    private void extractContent(JsonNode event, StringBuilder content, String eventType) {
         JsonNode assistant = firstExisting(event, "assistantResponseEvent", "codeEvent");
+        if (assistant == null && isEventType(eventType, "assistantResponseEvent", "codeEvent")) {
+            assistant = event;
+        }
         if (assistant != null && assistant.has("content")) {
             content.append(assistant.path("content").asText());
         }
     }
 
+    private void extractToolUse(JsonNode event, ToolUseAccumulator toolUses, String eventType) {
+        JsonNode toolUse = firstExisting(event, "toolUseEvent");
+        if (toolUse == null && isEventType(eventType, "toolUseEvent")) {
+            toolUse = event;
+        }
+        if (toolUse == null) {
+            return;
+        }
+        String id = firstNonBlank(toolUse.path("toolUseId").asText(null), toolUse.path("id").asText(null));
+        String name = firstNonBlank(toolUse.path("name").asText(null), toolUse.path("toolName").asText(null));
+        if (id != null && name != null) {
+            toolUses.start(id, name);
+        }
+        JsonNode input = toolUse.path("input");
+        if (!input.isMissingNode() && !input.isNull()) {
+            toolUses.appendInput(input);
+        }
+        if (toolUse.path("stop").asBoolean(false)) {
+            toolUses.finish();
+        }
+    }
+
     private void extractUsage(JsonNode event, UsageAccumulator usage, String fallbackModel) {
+        extractUsage(event, usage, fallbackModel, "");
+    }
+
+    private void extractUsage(JsonNode event, UsageAccumulator usage, String fallbackModel, String eventType) {
         JsonNode metadata = firstExisting(event, "messageMetadataEvent", "metadataEvent");
+        if (metadata == null && isEventType(eventType, "messageMetadataEvent", "metadataEvent")) {
+            metadata = event;
+        }
         if (metadata != null) {
             JsonNode tokenUsage = metadata.path("tokenUsage");
             if (!tokenUsage.isMissingNode()) {
@@ -92,6 +139,9 @@ public class AwsEventStreamParser {
             if (metadata.has("outputTokens")) usage.outputTokens = metadata.path("outputTokens").asLong();
         }
         JsonNode usageEvent = firstExisting(event, "usageEvent", "usage");
+        if (usageEvent == null && isEventType(eventType, "usageEvent", "usage")) {
+            usageEvent = event;
+        }
         if (usageEvent != null) {
             if (usageEvent.has("inputTokens")) usage.inputTokens = usageEvent.path("inputTokens").asLong();
             if (usageEvent.has("outputTokens")) usage.outputTokens = usageEvent.path("outputTokens").asLong();
@@ -106,6 +156,27 @@ public class AwsEventStreamParser {
         }
     }
 
+    private boolean isEventType(String eventType, String... candidates) {
+        if (eventType == null || eventType.isBlank()) {
+            return false;
+        }
+        for (String candidate : candidates) {
+            if (eventType.equals(candidate)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
+    }
+
     private JsonNode firstExisting(JsonNode node, String... fieldNames) {
         for (String fieldName : fieldNames) {
             JsonNode value = node.path(fieldName);
@@ -114,6 +185,60 @@ public class AwsEventStreamParser {
             }
         }
         return null;
+    }
+
+    private String extractEventType(byte[] bytes, int headersStart, int headersLength) {
+        int offset = headersStart;
+        int end = headersStart + headersLength;
+        while (offset < end) {
+            int nameLength = Byte.toUnsignedInt(bytes[offset++]);
+            if (offset + nameLength > end) {
+                break;
+            }
+            String name = new String(bytes, offset, nameLength, StandardCharsets.UTF_8);
+            offset += nameLength;
+            if (offset >= end) {
+                break;
+            }
+            int valueType = Byte.toUnsignedInt(bytes[offset++]);
+            if (valueType == 7) {
+                if (offset + 2 > end) {
+                    break;
+                }
+                int valueLength = Short.toUnsignedInt(ByteBuffer.wrap(bytes, offset, 2).order(ByteOrder.BIG_ENDIAN).getShort());
+                offset += 2;
+                if (offset + valueLength > end) {
+                    break;
+                }
+                String value = new String(bytes, offset, valueLength, StandardCharsets.UTF_8);
+                offset += valueLength;
+                if (":event-type".equals(name)) {
+                    return value;
+                }
+                continue;
+            }
+            offset += headerValueSize(bytes, offset, end, valueType);
+        }
+        return "";
+    }
+
+    private int headerValueSize(byte[] bytes, int offset, int end, int valueType) {
+        return switch (valueType) {
+            case 0, 1 -> 0;
+            case 2 -> 1;
+            case 3 -> 2;
+            case 4 -> 4;
+            case 5, 8 -> 8;
+            case 9 -> 16;
+            case 6 -> {
+                if (offset + 2 > end) {
+                    yield end - offset;
+                }
+                int valueLength = Short.toUnsignedInt(ByteBuffer.wrap(bytes, offset, 2).order(ByteOrder.BIG_ENDIAN).getShort());
+                yield Math.min(2 + valueLength, end - offset);
+            }
+            default -> end - offset;
+        };
     }
 
     private JsonNode readJsonOrNull(String text) {
@@ -137,6 +262,57 @@ public class AwsEventStreamParser {
             return 200_000;
         }
         return 200_000;
+    }
+
+    private final class ToolUseAccumulator {
+        private final List<KiroToolUse> items = new ArrayList<>();
+        private String id;
+        private String name;
+        private StringBuilder input = new StringBuilder();
+
+        private void start(String nextId, String nextName) {
+            if (id != null && !id.equals(nextId)) {
+                finish();
+            }
+            id = nextId;
+            name = nextName;
+        }
+
+        private void appendInput(JsonNode inputNode) {
+            if (id == null) {
+                return;
+            }
+            if (inputNode.isTextual()) {
+                input.append(inputNode.asText());
+                return;
+            }
+            input = new StringBuilder(inputNode.toString());
+        }
+
+        private void finish() {
+            if (id == null || name == null) {
+                return;
+            }
+            items.add(new KiroToolUse(id, name, parseInput(input.toString())));
+            id = null;
+            name = null;
+            input = new StringBuilder();
+        }
+
+        private List<KiroToolUse> items() {
+            return List.copyOf(items);
+        }
+
+        private JsonNode parseInput(String text) {
+            if (text == null || text.isBlank()) {
+                return objectMapper.createObjectNode();
+            }
+            JsonNode parsed = readJsonOrNull(text);
+            if (parsed != null) {
+                return parsed;
+            }
+            return objectMapper.createObjectNode().put("_partialInput", text);
+        }
     }
 
     private static final class UsageAccumulator {

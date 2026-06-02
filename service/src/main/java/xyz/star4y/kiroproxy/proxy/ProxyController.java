@@ -37,4 +37,9 @@ public class ProxyController implements ProxyApi {
     public Mono<ResponseEntity<?>> responses(@RequestBody JsonNode request, ServerWebExchange exchange) {
         return facade.responses(request, exchange);
     }
+
+    @Override
+    public Mono<ResponseEntity<?>> messages(@RequestBody JsonNode request, ServerWebExchange exchange) {
+        return facade.messages(request, exchange);
+    }
 }

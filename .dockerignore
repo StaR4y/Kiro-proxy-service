@@ -4,6 +4,8 @@
 build
 api/build
 service/build
+webui/dist
+webui/node_modules
 .env
 .env.*
 *.log

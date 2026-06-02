@@ -56,6 +56,12 @@ Or use the startup helper:
 ./scripts/start-proxy.sh
 ```
 
+Deploy to a Linux server with Docker Compose:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/StaR4y/Kiro-proxy-service/main/scripts/install-server.sh | sudo bash
+```
+
 Check the service:
 
 ```bash
@@ -146,6 +152,7 @@ curl -X POST http://127.0.0.1:8080/v1/chat/completions \
 
 - [API Reference](docs/API.md)
 - [Configuration](docs/CONFIGURATION.md)
+- [Server One-Click Install](docs/INSTALL_SERVER.md)
 - [1Panel Deployment](docs/1PANEL_DEPLOY.md)
 - [Account Import and Proxy Startup](docs/OPERATIONS.md)
 - [Architecture](docs/ARCHITECTURE.md)

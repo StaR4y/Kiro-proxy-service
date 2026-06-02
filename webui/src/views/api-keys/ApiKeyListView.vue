@@ -13,9 +13,18 @@
 
   const loading = ref(false);
   const apiKeys = ref<ApiKey[]>([]);
+  const apiOrigin = computed(() => {
+    const configured = import.meta.env.VITE_API_BASE;
+    if (configured) {
+      return String(configured).replace(/\/$/, '');
+    }
+    if (import.meta.env.DEV) {
+      return 'http://127.0.0.1:8080';
+    }
+    return window.location.origin.replace(/\/$/, '');
+  });
   const apiBaseUrl = computed(() => {
-    const base = import.meta.env.VITE_API_BASE || window.location.origin;
-    return `${String(base).replace(/\/$/, '')}/v1`;
+    return `${apiOrigin.value}/v1`;
   });
   const apiPort = computed(() => {
     try {
@@ -80,7 +89,15 @@
   const newKeyVisible = ref(false);
   const newKey = ref<CreatedApiKey | null>(null);
   type SetupPlatform = 'macos' | 'linux' | 'windows';
-  const setupPlatform = ref<SetupPlatform>('macos');
+  const setupPlatforms: Array<{
+    platform: SetupPlatform;
+    label: string;
+    description: string;
+  }> = [
+    { platform: 'macos', label: 'macOS', description: '写入当前用户 zsh profile' },
+    { platform: 'linux', label: 'Linux', description: '自动适配 bash / zsh profile' },
+    { platform: 'windows', label: 'Windows PowerShell', description: '写入当前用户 PowerShell profile' },
+  ];
 
   function shQuote(value: string) {
     return `'${value.replace(/'/g, `'\"'\"'`)}'`;
@@ -90,72 +107,122 @@
     return `'${value.replace(/'/g, `''`)}'`;
   }
 
-  type UnixSetupPlatform = 'macos' | 'linux' | 'shell';
+  type UnixSetupPlatform = 'macos' | 'linux';
 
   function normalizedApiKey(apiKey?: string | null) {
     return apiKey?.trim() || 'sk-REPLACE_ME';
   }
 
-  function buildUnixSetupScript(
-    platform: UnixSetupPlatform,
-    apiKeyValue = newKey.value?.key,
-    notes: string[] = [],
-  ) {
+  function buildUnixSetupScript(platform: UnixSetupPlatform, apiKeyValue = newKey.value?.key) {
+    const rootUrl = shQuote(apiOrigin.value);
     const baseUrl = shQuote(apiBaseUrl.value);
     const apiKey = shQuote(normalizedApiKey(apiKeyValue));
     const port = shQuote(apiPort.value);
-    const title =
-      platform === 'macos' ? 'macOS' : platform === 'linux' ? 'Linux' : 'macOS/Linux';
     const profileLine =
       platform === 'macos'
         ? `PROFILE="\${ZDOTDIR:-$HOME}/.zshrc"`
         : `PROFILE="$HOME/.bashrc"; [ -n "$ZSH_VERSION" ] && PROFILE="\${ZDOTDIR:-$HOME}/.zshrc"`;
 
     return [
-      `# ${title}: Kiro Proxy API`,
-      ...notes.map((note) => `# ${note}`),
       profileLine,
+      `BEGIN="# >>> kiro-proxy env >>>"`,
+      `END="# <<< kiro-proxy env <<<"`,
+      `touch "$PROFILE"`,
+      `sed -i.bak "/$BEGIN/,/$END/d" "$PROFILE"`,
       `cat >> "$PROFILE" <<'EOF'`,
+      `# >>> kiro-proxy env >>>`,
       `export OPENAI_BASE_URL=${baseUrl}`,
       `export OPENAI_API_KEY=${apiKey}`,
+      `export ANTHROPIC_BASE_URL=${rootUrl}`,
+      `export ANTHROPIC_API_KEY=${apiKey}`,
+      `export ANTHROPIC_AUTH_TOKEN=${apiKey}`,
+      `export ANTHROPIC_MODEL='auto'`,
+      `export ANTHROPIC_SMALL_FAST_MODEL='auto'`,
+      `export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC='1'`,
+      `export KIRO_PROXY_BASE_URL=${baseUrl}`,
+      `export KIRO_PROXY_API_KEY=${apiKey}`,
       `export KIRO_PROXY_PORT=${port}`,
+      `# <<< kiro-proxy env <<<`,
       `EOF`,
       `export OPENAI_BASE_URL=${baseUrl}`,
       `export OPENAI_API_KEY=${apiKey}`,
+      `export ANTHROPIC_BASE_URL=${rootUrl}`,
+      `export ANTHROPIC_API_KEY=${apiKey}`,
+      `export ANTHROPIC_AUTH_TOKEN=${apiKey}`,
+      `export ANTHROPIC_MODEL='auto'`,
+      `export ANTHROPIC_SMALL_FAST_MODEL='auto'`,
+      `export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC='1'`,
+      `export KIRO_PROXY_BASE_URL=${baseUrl}`,
+      `export KIRO_PROXY_API_KEY=${apiKey}`,
       `export KIRO_PROXY_PORT=${port}`,
       `echo "saved: $PROFILE"`,
     ].join('\n');
   }
 
   function buildWindowsSetupScript(apiKeyValue = newKey.value?.key) {
+    const rootUrl = psQuote(apiOrigin.value);
     const baseUrl = psQuote(apiBaseUrl.value);
     const apiKey = psQuote(normalizedApiKey(apiKeyValue));
     const port = psQuote(apiPort.value);
 
     return [
-      `# Windows PowerShell: Kiro Proxy API`,
       `New-Item -ItemType Directory -Force (Split-Path $PROFILE) | Out-Null`,
+      `$begin = '# >>> kiro-proxy env >>>'`,
+      `$end = '# <<< kiro-proxy env <<<'`,
+      `$content = if (Test-Path $PROFILE) { Get-Content $PROFILE -Raw } else { '' }`,
+      `$pattern = '(?s)\\r?\\n?# >>> kiro-proxy env >>>.*?# <<< kiro-proxy env <<<\\r?\\n?'`,
+      `[regex]::Replace($content, $pattern, '') | Set-Content -Path $PROFILE -Encoding UTF8`,
       `@'`,
+      `# >>> kiro-proxy env >>>`,
       `$env:OPENAI_BASE_URL = ${baseUrl}`,
       `$env:OPENAI_API_KEY = ${apiKey}`,
+      `$env:ANTHROPIC_BASE_URL = ${rootUrl}`,
+      `$env:ANTHROPIC_API_KEY = ${apiKey}`,
+      `$env:ANTHROPIC_AUTH_TOKEN = ${apiKey}`,
+      `$env:ANTHROPIC_MODEL = 'auto'`,
+      `$env:ANTHROPIC_SMALL_FAST_MODEL = 'auto'`,
+      `$env:CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = '1'`,
+      `$env:KIRO_PROXY_BASE_URL = ${baseUrl}`,
+      `$env:KIRO_PROXY_API_KEY = ${apiKey}`,
       `$env:KIRO_PROXY_PORT = ${port}`,
+      `# <<< kiro-proxy env <<<`,
       `'@ | Add-Content -Path $PROFILE -Encoding UTF8`,
       `$env:OPENAI_BASE_URL = ${baseUrl}`,
       `$env:OPENAI_API_KEY = ${apiKey}`,
+      `$env:ANTHROPIC_BASE_URL = ${rootUrl}`,
+      `$env:ANTHROPIC_API_KEY = ${apiKey}`,
+      `$env:ANTHROPIC_AUTH_TOKEN = ${apiKey}`,
+      `$env:ANTHROPIC_MODEL = 'auto'`,
+      `$env:ANTHROPIC_SMALL_FAST_MODEL = 'auto'`,
+      `$env:CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = '1'`,
+      `$env:KIRO_PROXY_BASE_URL = ${baseUrl}`,
+      `$env:KIRO_PROXY_API_KEY = ${apiKey}`,
       `$env:KIRO_PROXY_PORT = ${port}`,
       `Write-Host "saved: $PROFILE"`,
     ].join('\n');
   }
 
-  const setupScripts = computed<Record<SetupPlatform, string>>(() => ({
-    macos: buildUnixSetupScript('macos'),
-    linux: buildUnixSetupScript('linux'),
-    windows: buildWindowsSetupScript(),
-  }));
-  const activeSetupScript = computed(() => setupScripts.value[setupPlatform.value]);
+  function buildSetupScripts(apiKeyValue = newKey.value?.key): Record<SetupPlatform, string> {
+    return {
+      macos: buildUnixSetupScript('macos', apiKeyValue),
+      linux: buildUnixSetupScript('linux', apiKeyValue),
+      windows: buildWindowsSetupScript(apiKeyValue),
+    };
+  }
+
+  function scriptBlocks(scripts: Record<SetupPlatform, string>) {
+    return setupPlatforms.map((item) => ({
+      ...item,
+      script: scripts[item.platform],
+    }));
+  }
+
+  const setupScripts = computed<Record<SetupPlatform, string>>(() => buildSetupScripts(newKey.value?.key));
+  const setupScriptBlocks = computed(() => scriptBlocks(setupScripts.value));
   const connectionText = computed(() =>
     [
       `Base URL: ${apiBaseUrl.value}`,
+      `Claude Code URL: ${apiOrigin.value}`,
       `API Key: ${newKey.value?.key ?? ''}`,
       `Port: ${apiPort.value}`,
     ].join('\n'),
@@ -170,15 +237,36 @@
     }
   }
 
+  function scriptCopyMessage(label: string) {
+    return `已复制 ${label} 脚本`;
+  }
+
   function rowApiKeyPlaceholder(row: ApiKey) {
     return row.keyPrefix ? `${row.keyPrefix}REPLACE_REST_OF_KEY` : 'sk-REPLACE_ME';
   }
 
-  async function copyShellConfig(row: ApiKey) {
-    const script = buildUnixSetupScript('shell', rowApiKeyPlaceholder(row), [
-      '当前列表仅保存密钥前缀，请把 OPENAI_API_KEY 替换为创建时保存的完整 API Key。',
-    ]);
-    await copy(script, '已复制 Shell 配置，需替换为完整 API Key');
+  /* 已有密钥只保存前缀，配置面板中使用占位符提醒替换为完整密钥。 */
+  const configVisible = ref(false);
+  const configKey = ref<ApiKey | null>(null);
+  const configDialogTitle = computed(() =>
+    configKey.value ? `${configKey.value.name} 配置脚本` : '配置脚本',
+  );
+  const configApiKey = computed(() =>
+    configKey.value ? rowApiKeyPlaceholder(configKey.value) : 'sk-REPLACE_ME',
+  );
+  const configConnectionText = computed(() =>
+    [
+      `Base URL: ${apiBaseUrl.value}`,
+      `Claude Code URL: ${apiOrigin.value}`,
+      `API Key: ${configApiKey.value}`,
+      `Port: ${apiPort.value}`,
+    ].join('\n'),
+  );
+  const configScriptBlocks = computed(() => scriptBlocks(buildSetupScripts(configApiKey.value)));
+
+  function openShellConfig(row: ApiKey) {
+    configKey.value = row;
+    configVisible.value = true;
   }
 
   async function submitForm() {
@@ -271,7 +359,7 @@
           <el-button link type="primary" @click="toggleEnabled(row)">
             {{ row.enabled ? '停用' : '启用' }}
           </el-button>
-          <el-button link type="primary" @click="copyShellConfig(row)">复制 Shell</el-button>
+          <el-button link type="primary" @click="openShellConfig(row)">配置脚本</el-button>
           <el-button link type="danger" @click="removeKey(row)">删除</el-button>
         </template>
       </el-table-column>
@@ -297,6 +385,85 @@
     <template #footer>
       <el-button @click="formVisible = false">取消</el-button>
       <el-button type="primary" :loading="formSubmitting" @click="submitForm">提交</el-button>
+    </template>
+  </el-dialog>
+
+  <el-dialog v-model="configVisible" :title="configDialogTitle" width="900px">
+    <div class="config-dialog-body">
+      <el-alert
+        class="secret-alert"
+        title="已有 API Key 只保留前缀。脚本中的 OPENAI_API_KEY 带占位符，需要替换为创建时保存的完整密钥。"
+        type="warning"
+        :closable="false"
+        show-icon
+      />
+
+      <section v-if="configKey" class="secret-panel">
+        <div class="secret-panel__head">
+          <div>
+            <h3>连接信息</h3>
+            <p>复制脚本前先确认 API 地址和密钥前缀。</p>
+          </div>
+          <el-button size="small" @click="copy(configConnectionText, '已复制连接信息')">
+            复制连接信息
+          </el-button>
+        </div>
+
+        <div class="secret-fields">
+          <div class="secret-field">
+            <span class="secret-field__label">名称</span>
+            <code class="secret-field__value mono" :title="configKey.name">{{ configKey.name }}</code>
+          </div>
+          <div class="secret-field">
+            <span class="secret-field__label">Base URL</span>
+            <code class="secret-field__value mono" :title="apiBaseUrl">{{ apiBaseUrl }}</code>
+            <el-button size="small" @click="copy(apiBaseUrl)">复制</el-button>
+          </div>
+          <div class="secret-field">
+            <span class="secret-field__label">Claude</span>
+            <code class="secret-field__value mono" :title="apiOrigin">{{ apiOrigin }}</code>
+            <el-button size="small" @click="copy(apiOrigin)">复制</el-button>
+          </div>
+          <div class="secret-field">
+            <span class="secret-field__label">API Key</span>
+            <code class="secret-field__value mono" :title="configApiKey">{{ configApiKey }}</code>
+            <el-button size="small" @click="copy(configApiKey)">复制</el-button>
+          </div>
+          <div class="secret-field secret-field--compact">
+            <span class="secret-field__label">端口</span>
+            <code class="secret-field__value mono">{{ apiPort }}</code>
+            <el-button size="small" @click="copy(apiPort)">复制</el-button>
+          </div>
+        </div>
+      </section>
+
+      <section class="secret-panel setup-scripts">
+        <div class="secret-panel__head">
+          <div>
+            <h3>三大平台配置脚本</h3>
+            <p>选择对应平台复制到终端执行，会写入当前用户 profile 并立即生效。</p>
+          </div>
+        </div>
+
+        <div class="setup-script-list">
+          <article v-for="item in configScriptBlocks" :key="item.platform" class="script-card">
+            <div class="script-card__head">
+              <div>
+                <h4>{{ item.label }}</h4>
+                <p>{{ item.description }}</p>
+              </div>
+              <el-button size="small" type="primary" @click="copy(item.script, scriptCopyMessage(item.label))">
+                复制脚本
+              </el-button>
+            </div>
+            <pre class="setup-scripts__code"><code>{{ item.script }}</code></pre>
+          </article>
+        </div>
+      </section>
+    </div>
+
+    <template #footer>
+      <el-button type="primary" @click="configVisible = false">完成</el-button>
     </template>
   </el-dialog>
 
@@ -332,6 +499,11 @@
             <el-button size="small" @click="copy(apiBaseUrl)">复制</el-button>
           </div>
           <div class="secret-field">
+            <span class="secret-field__label">Claude</span>
+            <code class="secret-field__value mono" :title="apiOrigin">{{ apiOrigin }}</code>
+            <el-button size="small" @click="copy(apiOrigin)">复制</el-button>
+          </div>
+          <div class="secret-field">
             <span class="secret-field__label">API Key</span>
             <code class="secret-field__value mono" :title="newKey.key">{{ newKey.key }}</code>
             <el-button size="small" type="primary" @click="copy(newKey.key)">复制</el-button>
@@ -348,20 +520,24 @@
         <div class="secret-panel__head">
           <div>
             <h3>控制台一键配置</h3>
-            <p>复制到终端执行，会写入当前用户 profile 并立即生效。</p>
+            <p>按客户端所在系统复制脚本到终端执行，会写入当前用户 profile 并立即生效。</p>
           </div>
-          <el-button size="small" type="primary" @click="copy(activeSetupScript)">复制脚本</el-button>
         </div>
 
-        <div class="setup-scripts__toolbar">
-          <el-radio-group v-model="setupPlatform" size="small">
-            <el-radio-button label="macos">macOS</el-radio-button>
-            <el-radio-button label="linux">Linux</el-radio-button>
-            <el-radio-button label="windows">Windows</el-radio-button>
-          </el-radio-group>
+        <div class="setup-script-list">
+          <article v-for="item in setupScriptBlocks" :key="item.platform" class="script-card">
+            <div class="script-card__head">
+              <div>
+                <h4>{{ item.label }}</h4>
+                <p>{{ item.description }}</p>
+              </div>
+              <el-button size="small" type="primary" @click="copy(item.script, scriptCopyMessage(item.label))">
+                复制脚本
+              </el-button>
+            </div>
+            <pre class="setup-scripts__code"><code>{{ item.script }}</code></pre>
+          </article>
         </div>
-
-        <pre class="setup-scripts__code"><code>{{ activeSetupScript }}</code></pre>
       </section>
     </div>
     <template #footer>
@@ -371,7 +547,8 @@
 </template>
 
 <style scoped lang="scss">
-  .secret-dialog-body {
+  .secret-dialog-body,
+  .config-dialog-body {
     display: grid;
     gap: 14px;
   }
@@ -446,15 +623,8 @@
   }
 
   .setup-scripts {
-    &__toolbar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 10px;
-    }
-
     &__code {
-      max-height: 240px;
+      max-height: 220px;
       overflow: auto;
       margin: 0;
       padding: 12px 14px;
@@ -468,8 +638,42 @@
     }
   }
 
+  .setup-script-list {
+    display: grid;
+    gap: 12px;
+  }
+
+  .script-card {
+    padding: 12px;
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.68);
+
+    &__head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 10px;
+
+      h4 {
+        margin: 0;
+        color: var(--kp-text);
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      p {
+        margin: 2px 0 0;
+        color: var(--kp-text-secondary);
+        font-size: 12px;
+      }
+    }
+  }
+
   @media (max-width: 720px) {
-    .secret-panel__head {
+    .secret-panel__head,
+    .script-card__head {
       flex-direction: column;
     }
 

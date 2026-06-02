@@ -21,4 +21,7 @@ public interface ProxyApi {
 
     @PostMapping({"/v1/responses", "/responses"})
     Mono<ResponseEntity<?>> responses(@RequestBody JsonNode request, ServerWebExchange exchange);
+
+    @PostMapping({"/v1/messages", "/messages"})
+    Mono<ResponseEntity<?>> messages(@RequestBody JsonNode request, ServerWebExchange exchange);
 }

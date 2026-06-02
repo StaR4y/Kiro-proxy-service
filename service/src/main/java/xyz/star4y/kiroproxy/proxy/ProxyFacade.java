@@ -11,6 +11,7 @@ import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Flux;
@@ -25,6 +26,12 @@ import xyz.star4y.kiroproxy.stats.StatsService;
 
 @Service
 public class ProxyFacade {
+
+    private enum ResponseMode {
+        OPENAI_CHAT,
+        OPENAI_RESPONSES,
+        ANTHROPIC_MESSAGES
+    }
 
     private final ObjectMapper objectMapper;
     private final ApiKeyService apiKeyService;
@@ -60,13 +67,19 @@ public class ProxyFacade {
 
     public Mono<ResponseEntity<?>> chat(JsonNode request, ServerWebExchange exchange) {
         return authenticateAndLimit(exchange)
-            .flatMap(principal -> invokeOpenAiChat(request, exchange, principal, "/v1/chat/completions", false));
+            .flatMap(principal -> invokeOpenAiChat(request, exchange, principal, "/v1/chat/completions", ResponseMode.OPENAI_CHAT));
     }
 
     public Mono<ResponseEntity<?>> responses(JsonNode request, ServerWebExchange exchange) {
         ObjectNode chat = responsesToChat(request);
         return authenticateAndLimit(exchange)
-            .flatMap(principal -> invokeOpenAiChat(chat, exchange, principal, "/v1/responses", true));
+            .flatMap(principal -> invokeOpenAiChat(chat, exchange, principal, "/v1/responses", ResponseMode.OPENAI_RESPONSES));
+    }
+
+    public Mono<ResponseEntity<?>> messages(JsonNode request, ServerWebExchange exchange) {
+        ObjectNode chat = anthropicToChat(request);
+        return authenticateAndLimit(exchange)
+            .flatMap(principal -> invokeOpenAiChat(chat, exchange, principal, "/v1/messages", ResponseMode.ANTHROPIC_MESSAGES));
     }
 
     private Mono<ResponseEntity<?>> invokeOpenAiChat(
@@ -74,7 +87,7 @@ public class ProxyFacade {
         ServerWebExchange exchange,
         ApiKeyPrincipal principal,
         String path,
-        boolean responseApi
+        ResponseMode responseMode
     ) {
         validateChatRequest(request);
         Instant start = Instant.now();
@@ -89,8 +102,8 @@ public class ProxyFacade {
                 .flatMap(result -> {
                     Mono<Void> accounting = recordSuccess(requestId, principal, account, path, requestedModel, result, start);
                     ResponseEntity<?> response = stream
-                        ? streamResponse(mappedModel, result)
-                        : jsonResponse(responseApi, request, mappedModel, result);
+                        ? streamResponse(responseMode, mappedModel, result)
+                        : jsonResponse(responseMode, request, mappedModel, result);
                     return accounting.thenReturn(response);
                 })
                 .onErrorResume(error -> recordFailure(requestId, principal, account, path, requestedModel, error, start)
@@ -202,21 +215,24 @@ public class ProxyFacade {
         return current;
     }
 
-    private ResponseEntity<?> jsonResponse(boolean responseApi, JsonNode request, String mappedModel, KiroCompletionResult result) {
-        ObjectNode body = responseApi
-            ? responseFactory.responses(mappedModel, result, request.path("previous_response_id").asText(null))
-            : responseFactory.chatCompletion(mappedModel, result);
+    private ResponseEntity<?> jsonResponse(ResponseMode mode, JsonNode request, String mappedModel, KiroCompletionResult result) {
+        ObjectNode body = switch (mode) {
+            case OPENAI_RESPONSES -> responseFactory.responses(mappedModel, result, request.path("previous_response_id").asText(null));
+            case ANTHROPIC_MESSAGES -> responseFactory.anthropicMessage(mappedModel, result);
+            case OPENAI_CHAT -> responseFactory.chatCompletion(mappedModel, result);
+        };
         return ResponseEntity.ok(body);
     }
 
-    private ResponseEntity<Flux<String>> streamResponse(String mappedModel, KiroCompletionResult result) {
-        Flux<String> body = Flux.just(
-            responseFactory.chatStreamChunk(mappedModel, result.content()),
-            responseFactory.chatStreamStop(mappedModel)
-        );
+    private ResponseEntity<Flux<ServerSentEvent<String>>> streamResponse(ResponseMode mode, String mappedModel, KiroCompletionResult result) {
+        if (mode == ResponseMode.ANTHROPIC_MESSAGES) {
+            return ResponseEntity.ok()
+                .contentType(MediaType.TEXT_EVENT_STREAM)
+                .body(responseFactory.anthropicMessageStream(mappedModel, result));
+        }
         return ResponseEntity.ok()
             .contentType(MediaType.TEXT_EVENT_STREAM)
-            .body(body);
+            .body(responseFactory.chatStreamEvents(mappedModel, result));
     }
 
     private ObjectNode responsesToChat(JsonNode request) {
@@ -247,6 +263,34 @@ public class ProxyFacade {
         return chat;
     }
 
+    private ObjectNode anthropicToChat(JsonNode request) {
+        ObjectNode chat = objectMapper.createObjectNode();
+        chat.put("model", request.path("model").asText("claude-sonnet-4.5"));
+        if (request.has("max_tokens")) chat.set("max_tokens", request.get("max_tokens"));
+        if (request.has("temperature")) chat.set("temperature", request.get("temperature"));
+        if (request.has("top_p")) chat.set("top_p", request.get("top_p"));
+        if (request.has("stream")) chat.set("stream", request.get("stream"));
+        ArrayNode messages = chat.putArray("messages");
+        if (request.hasNonNull("system")) {
+            ObjectNode system = messages.addObject();
+            system.put("role", "system");
+            system.put("content", anthropicContentText(request.path("system")));
+        }
+        JsonNode inputMessages = request.path("messages");
+        if (inputMessages.isArray()) {
+            for (JsonNode item : inputMessages) {
+                ObjectNode message = messages.addObject();
+                String role = item.path("role").asText("user");
+                message.put("role", "assistant".equals(role) ? "assistant" : "user");
+                message.put("content", anthropicContentText(item.path("content")));
+            }
+        }
+        if (request.path("tools").isArray() && !request.path("tools").isEmpty()) {
+            chat.set("tools", anthropicToolsToOpenAi(request.path("tools")));
+        }
+        return chat;
+    }
+
     private JsonNode normalizeResponsesContent(JsonNode content) {
         if (!content.isArray()) {
             return content;
@@ -260,6 +304,66 @@ public class ProxyFacade {
             }
         }
         return normalized;
+    }
+
+    private String anthropicContentText(JsonNode content) {
+        if (content == null || content.isMissingNode() || content.isNull()) {
+            return "";
+        }
+        if (content.isTextual()) {
+            return content.asText();
+        }
+        if (!content.isArray()) {
+            return content.toString();
+        }
+        StringBuilder builder = new StringBuilder();
+        for (JsonNode part : content) {
+            String type = part.path("type").asText();
+            String text = switch (type) {
+                case "text" -> part.path("text").asText("");
+                case "tool_result" -> anthropicToolResultText(part);
+                case "tool_use" -> anthropicToolUseText(part);
+                default -> "";
+            };
+            if (!text.isBlank()) {
+                if (!builder.isEmpty()) builder.append("\n");
+                builder.append(text);
+            }
+        }
+        return builder.toString();
+    }
+
+    private String anthropicToolResultText(JsonNode part) {
+        JsonNode content = part.path("content");
+        if (content.isTextual()) {
+            return content.asText();
+        }
+        if (content.isArray()) {
+            return anthropicContentText(content);
+        }
+        return content.isMissingNode() || content.isNull() ? "" : content.toString();
+    }
+
+    private String anthropicToolUseText(JsonNode part) {
+        String name = part.path("name").asText("");
+        JsonNode input = part.path("input");
+        if (input.isMissingNode() || input.isNull() || input.isEmpty()) {
+            return "Tool use: " + name;
+        }
+        return "Tool use: " + name + "\nInput: " + input;
+    }
+
+    private ArrayNode anthropicToolsToOpenAi(JsonNode tools) {
+        ArrayNode converted = objectMapper.createArrayNode();
+        for (JsonNode tool : tools) {
+            ObjectNode wrapper = converted.addObject();
+            wrapper.put("type", "function");
+            ObjectNode function = wrapper.putObject("function");
+            function.put("name", tool.path("name").asText());
+            function.put("description", tool.path("description").asText(""));
+            function.set("parameters", tool.path("input_schema"));
+        }
+        return converted;
     }
 
     private void validateChatRequest(JsonNode request) {

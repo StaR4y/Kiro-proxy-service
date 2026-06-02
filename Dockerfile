@@ -1,7 +1,16 @@
+FROM node:20-bookworm-slim AS webui-build
+
+WORKDIR /workspace/webui
+COPY webui/package*.json ./
+RUN npm ci
+COPY webui/ ./
+RUN npm run build
+
 FROM eclipse-temurin:17-jdk AS build
 
 WORKDIR /workspace
 COPY . .
+COPY --from=webui-build /workspace/webui/dist/ /workspace/service/src/main/resources/static/
 RUN chmod +x gradlew && ./gradlew --no-daemon :service:bootJar -x test
 
 FROM eclipse-temurin:17-jre

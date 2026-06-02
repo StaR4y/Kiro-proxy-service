@@ -11,6 +11,23 @@ This deployment uses Docker Compose in 1Panel:
 
 Only the 1Panel reverse proxy should be exposed publicly. The service container is bound to `127.0.0.1:${HOST_HTTP_PORT}` by default.
 
+## One-Click Server Install
+
+On a fresh Linux server, you can let the installer prepare Docker, clone the repo, generate `.env`, build the image, and start the stack:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/StaR4y/Kiro-proxy-service/main/scripts/install-server.sh \
+  | sudo env PUBLIC_BASE_URL=https://your-domain.example bash
+```
+
+After it finishes, create the 1Panel reverse proxy site with target:
+
+```text
+http://127.0.0.1:18080
+```
+
+Manual deployment steps are kept below for existing servers or custom MySQL setups.
+
 ## 1. Prepare Server Directory
 
 Open the 1Panel terminal or SSH into the server:
