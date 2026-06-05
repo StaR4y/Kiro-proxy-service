@@ -21,6 +21,7 @@
     { name: 'accounts', label: '账号管理', icon: '' },
     { name: 'api-keys', label: 'API Key', icon: '' },
     { name: 'model-mappings', label: '模型映射', icon: '' },
+    { name: 'models', label: '模型 ID', icon: '' },
     { name: 'logs', label: '请求日志', icon: '' },
     { name: 'users', label: '管理员', icon: '' },
   ];

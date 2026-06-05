@@ -128,6 +128,9 @@ Response:
       "object": "model",
       "created": 1770000000,
       "owned_by": "kiro-api",
+      "provider": "Anthropic",
+      "family": "Claude 4",
+      "targetModelId": "claude-sonnet-4.5",
       "name": "Claude Sonnet 4.5",
       "modelName": "Claude Sonnet 4.5",
       "description": "The latest Claude Sonnet model",
@@ -141,41 +144,26 @@ Response:
 }
 ```
 
-Current static model IDs:
+Model catalog fields:
 
-- `auto`
-- `claude-sonnet-4.5`
-- `claude-sonnet-4`
-- `claude-haiku-4.5`
-- `claude-opus-4.5`
-- `claude-3.7-sonnet`
-- `simple-task`
-- `CLAUDE_SONNET_4_20250514_V1_0`
-- `CLAUDE_HAIKU_4_5_20251001_V1_0`
-- `CLAUDE_3_7_SONNET_20250219_V1_0`
-- `gpt-5.2`
-- `gpt-5.2-pro`
-- `gpt-5.1`
-- `gpt-5.1-chat-latest`
-- `gpt-5`
-- `gpt-5-mini`
-- `gpt-5-nano`
-- `gpt-4.1`
-- `gpt-4.1-mini`
-- `gpt-4.1-nano`
-- `gpt-4o`
-- `gpt-4o-mini`
-- `chatgpt-4o`
-- `gpt-4`
-- `gpt-4-turbo`
-- `gpt-3.5-turbo`
-- `o3`
-- `o3-mini`
-- `o3-pro`
-- `o4-mini`
-- `o1`
-- `o1-pro`
-- `o1-mini`
+| Field | Description |
+| --- | --- |
+| `provider` | Top-level catalog group, currently `Anthropic` or `OpenAI`. |
+| `family` | Provider-local model family such as `Claude 4`, `GPT-5`, or `OpenAI Reasoning`. |
+| `targetModelId` | Kiro upstream model ID used after compatibility alias mapping. |
+
+Current model IDs are grouped by provider and family:
+
+| Provider | Family | IDs |
+| --- | --- | --- |
+| Anthropic | Kiro Preset | `auto`, `simple-task` |
+| Anthropic | Claude 4 | `claude-sonnet-4.5`, `claude-sonnet-4`, `claude-haiku-4.5`, `claude-opus-4.5` |
+| Anthropic | Claude 3 | `claude-3.7-sonnet` |
+| Anthropic | CodeWhisperer Internal | `CLAUDE_SONNET_4_20250514_V1_0`, `CLAUDE_HAIKU_4_5_20251001_V1_0`, `CLAUDE_3_7_SONNET_20250219_V1_0` |
+| OpenAI | GPT-5 | `gpt-5.2`, `gpt-5.2-pro`, `gpt-5.1`, `gpt-5.1-chat-latest`, `gpt-5`, `gpt-5-mini`, `gpt-5-nano` |
+| OpenAI | GPT-4 | `gpt-4.1`, `gpt-4.1-mini`, `gpt-4.1-nano`, `gpt-4o`, `gpt-4o-mini`, `chatgpt-4o`, `gpt-4`, `gpt-4-turbo` |
+| OpenAI | GPT-3.5 | `gpt-3.5-turbo` |
+| OpenAI | OpenAI Reasoning | `o3`, `o3-mini`, `o3-pro`, `o4-mini`, `o1`, `o1-pro`, `o1-mini` |
 
 ### Chat Completions
 
@@ -871,5 +859,5 @@ GET /actuator/prometheus
 - OpenAI `responses` text input is converted to chat internally.
 - Claude `/v1/messages` text and basic tool-use payloads are converted to chat internally.
 - Basic function tool schemas are converted to Kiro tool specifications.
-- Common OpenAI model IDs are exposed as compatibility aliases and routed to Kiro models before upstream dispatch.
+- OpenAI and Anthropic model IDs are kept in separate catalogs and routed to Kiro models before upstream dispatch.
 - Images, documents, prompt cache controls, and complete tool-result parity are not complete yet.

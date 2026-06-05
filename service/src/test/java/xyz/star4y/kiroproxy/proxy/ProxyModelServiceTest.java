@@ -56,6 +56,11 @@ class ProxyModelServiceTest {
         assertThat(data.get(6).path("supportedInputTypes").get(0).asText()).isEqualTo("TEXT");
         assertThat(data.get(6).path("maxOutputTokens").asInt()).isEqualTo(4096);
         assertThat(data.get(10).path("owned_by").asText()).isEqualTo("kiro-proxy");
+        assertThat(data.get(10).path("provider").asText()).isEqualTo("OpenAI");
+        assertThat(data.get(10).path("family").asText()).isEqualTo("GPT-5");
+        assertThat(data.get(10).path("targetModelId").asText()).isEqualTo("claude-sonnet-4.5");
+        assertThat(data.get(1).path("provider").asText()).isEqualTo("Anthropic");
+        assertThat(data.get(1).path("family").asText()).isEqualTo("Claude 4");
     }
 
     @Test

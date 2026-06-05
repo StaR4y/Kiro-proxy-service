@@ -54,6 +54,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '模型映射' },
       },
       {
+        path: 'models',
+        name: 'models',
+        component: () => import('@/views/models/ModelListView.vue'),
+        meta: { title: '模型 ID' },
+      },
+      {
         path: 'logs',
         name: 'logs',
         component: () => import('@/views/logs/LogListView.vue'),

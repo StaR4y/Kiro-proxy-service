@@ -291,6 +291,9 @@ export interface ModelInfo {
   id: string;
   object: string;
   owned_by: string;
+  provider?: string;
+  family?: string;
+  targetModelId?: string;
   name?: string;
   modelName?: string;
   description?: string;

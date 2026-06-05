@@ -33,6 +33,9 @@ Completed:
 - OpenAPI UI at `/docs`.
 - Documentation for API, configuration, architecture, and troubleshooting.
 - WebUI API Key copy-script selector for generic shell variables, Claude Code, and OpenCode clients.
+- Modular OpenAI/Anthropic model catalogs with WebUI provider/family grouping for all `/v1/models` IDs.
+- Collapsed-by-default WebUI model vendor panels with provider logos for model catalog browsing.
+- Official provider logo assets and refined model ID catalog UI for clearer vendor/family browsing.
 - Multi-module layout with API contracts in `api`, concrete server implementation in `service`, and Vue/Vite management console in `webui`.
 
 Verified:
