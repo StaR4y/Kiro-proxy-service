@@ -41,7 +41,7 @@ export default defineConfig(({ mode }) => {
       port: 5173,
       proxy: {
         // 仅代理后端管理与代理 API 路径，避免拦截前端路由
-        '^/(auth|admin|v1|health|models|chat|responses|actuator)': {
+        '^/(auth|admin|v1|health|models|chat|responses|messages|actuator)': {
           target,
           changeOrigin: true,
         },

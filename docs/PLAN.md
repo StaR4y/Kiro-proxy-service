@@ -20,6 +20,8 @@ Completed:
 - OpenAI-compatible `/v1/models`.
 - OpenAI-compatible `/v1/chat/completions`.
 - OpenAI Responses-style `/v1/responses`.
+- Claude/Anthropic-compatible `/v1/messages` text and basic tool-use conversion.
+- OpenAI model compatibility aliases for current GPT/o-series client IDs.
 - API key creation with SHA-256 secret storage.
 - API key credits limit and aggregate usage tracking.
 - Per-key fixed-window rate limiting.
@@ -30,6 +32,7 @@ Completed:
 - AWS event-stream parser for assistant content and usage metadata.
 - OpenAPI UI at `/docs`.
 - Documentation for API, configuration, architecture, and troubleshooting.
+- WebUI API Key copy-script selector for generic shell variables, Claude Code, and OpenCode clients.
 - Multi-module layout with API contracts in `api`, concrete server implementation in `service`, and Vue/Vite management console in `webui`.
 
 Verified:
@@ -52,7 +55,6 @@ Verified:
 ## Known Gaps
 
 - `stream=true` produces SSE after upstream completion, not true upstream chunk passthrough.
-- Claude `/v1/messages` is not implemented.
 - Expired Kiro access token refresh is not implemented.
 - Dynamic Kiro model discovery is not implemented.
 - Tool-call/tool-result conversion is only partial.
@@ -67,12 +69,12 @@ Goal: cover common client formats from `Kiro-account-manager`.
 
 Tasks:
 
-1. Implement Claude `/v1/messages`.
+1. Complete Claude `/v1/messages` compatibility beyond text and basic tool-use conversion.
 2. Complete tool-call and tool-result conversion.
 3. Add image/document request conversion.
 4. Add prompt cache control conversion.
 5. Add dynamic `/v1/models` from Kiro upstream with cache TTL.
-6. Add compatibility tests for OpenAI, Responses, and Claude payloads.
+6. Add broader compatibility tests for OpenAI, Responses, and Claude payloads.
 
 ## Milestone 2: Account Reliability
 

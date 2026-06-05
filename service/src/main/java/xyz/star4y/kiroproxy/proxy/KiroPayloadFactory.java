@@ -69,6 +69,9 @@ public class KiroPayloadFactory {
         }
         allMessages = normalizeToolHistory(allMessages, request.get("tools"));
         allMessages = sanitizeConversation(allMessages);
+        if (endsWithToolResultOnly(allMessages)) {
+            allMessages.add(emptyCurrentMessage(model, origin));
+        }
 
         ObjectNode current = allMessages.isEmpty() ? continueMessage(model, origin) : allMessages.get(allMessages.size() - 1);
         ObjectNode currentUserInput = current.path("userInputMessage").isObject()
@@ -218,6 +221,15 @@ public class KiroPayloadFactory {
     private ObjectNode continueMessage(String model, String origin) {
         ObjectNode node = objectMapper.createObjectNode();
         node.set("userInputMessage", userInput(null, model, origin, null));
+        return node;
+    }
+
+    private ObjectNode emptyCurrentMessage(String model, String origin) {
+        ObjectNode node = objectMapper.createObjectNode();
+        ObjectNode userInput = node.putObject("userInputMessage");
+        userInput.put("content", "");
+        userInput.put("modelId", KiroModelMapper.map(model));
+        userInput.put("origin", origin);
         return node;
     }
 
@@ -470,6 +482,16 @@ public class KiroPayloadFactory {
     private boolean hasToolResults(ObjectNode message) {
         return message.path("userInputMessage").path("userInputMessageContext").path("toolResults").isArray()
             && !message.path("userInputMessage").path("userInputMessageContext").path("toolResults").isEmpty();
+    }
+
+    private boolean endsWithToolResultOnly(List<ObjectNode> messages) {
+        if (messages.isEmpty()) {
+            return false;
+        }
+        ObjectNode last = messages.get(messages.size() - 1);
+        return isUser(last)
+            && hasToolResults(last)
+            && last.path("userInputMessage").path("content").asText("").isBlank();
     }
 
     private boolean hasMatchingToolResults(ObjectNode assistant, ObjectNode user) {

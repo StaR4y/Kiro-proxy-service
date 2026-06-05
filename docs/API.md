@@ -153,10 +153,29 @@ Current static model IDs:
 - `CLAUDE_SONNET_4_20250514_V1_0`
 - `CLAUDE_HAIKU_4_5_20251001_V1_0`
 - `CLAUDE_3_7_SONNET_20250219_V1_0`
+- `gpt-5.2`
+- `gpt-5.2-pro`
+- `gpt-5.1`
+- `gpt-5.1-chat-latest`
+- `gpt-5`
+- `gpt-5-mini`
+- `gpt-5-nano`
+- `gpt-4.1`
+- `gpt-4.1-mini`
+- `gpt-4.1-nano`
 - `gpt-4o`
+- `gpt-4o-mini`
+- `chatgpt-4o`
 - `gpt-4`
 - `gpt-4-turbo`
 - `gpt-3.5-turbo`
+- `o3`
+- `o3-mini`
+- `o3-pro`
+- `o4-mini`
+- `o1`
+- `o1-pro`
+- `o1-mini`
 
 ### Chat Completions
 
@@ -850,6 +869,7 @@ GET /actuator/prometheus
 
 - OpenAI `chat.completions` text messages are supported.
 - OpenAI `responses` text input is converted to chat internally.
+- Claude `/v1/messages` text and basic tool-use payloads are converted to chat internally.
 - Basic function tool schemas are converted to Kiro tool specifications.
+- Common OpenAI model IDs are exposed as compatibility aliases and routed to Kiro models before upstream dispatch.
 - Images, documents, prompt cache controls, and complete tool-result parity are not complete yet.
-- Claude `/v1/messages` is not implemented yet.

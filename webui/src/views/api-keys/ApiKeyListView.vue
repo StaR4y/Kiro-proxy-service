@@ -88,16 +88,37 @@
   /* 创建后一次性密钥展示 */
   const newKeyVisible = ref(false);
   const newKey = ref<CreatedApiKey | null>(null);
+  type SetupClient = 'all' | 'claude' | 'opencode';
   type SetupPlatform = 'macos' | 'linux' | 'windows';
-  const setupPlatforms: Array<{
-    platform: SetupPlatform;
+  type SetupOption<T extends string> = {
+    value: T;
     label: string;
     description: string;
-  }> = [
-    { platform: 'macos', label: 'macOS', description: '写入当前用户 zsh profile' },
-    { platform: 'linux', label: 'Linux', description: '自动适配 bash / zsh profile' },
-    { platform: 'windows', label: 'Windows PowerShell', description: '写入当前用户 PowerShell profile' },
+  };
+  type SetupScriptBlock = {
+    client: SetupClient;
+    platform: SetupPlatform;
+    clientLabel: string;
+    platformLabel: string;
+    clientDescription: string;
+    platformDescription: string;
+    script: string;
+  };
+
+  const setupClients: Array<SetupOption<SetupClient>> = [
+    { value: 'all', label: '通用', description: '同时写入通用 API 变量、Claude Code 与 OpenCode 配置' },
+    { value: 'claude', label: 'Claude Code', description: '适用于 Anthropic/Claude Code 兼容客户端' },
+    { value: 'opencode', label: 'OpenCode', description: '生成项目级 opencode.json，并写入所需环境变量' },
   ];
+  const setupPlatforms: Array<SetupOption<SetupPlatform>> = [
+    { value: 'macos', label: 'macOS', description: '写入当前用户 zsh profile' },
+    { value: 'linux', label: 'Linux', description: '自动适配 bash / zsh profile' },
+    { value: 'windows', label: 'Windows PowerShell', description: '写入当前用户 PowerShell profile' },
+  ];
+  const newSetupClient = ref<SetupClient>('all');
+  const newSetupPlatform = ref<SetupPlatform>('macos');
+  const configSetupClient = ref<SetupClient>('all');
+  const configSetupPlatform = ref<SetupPlatform>('macos');
 
   function shQuote(value: string) {
     return `'${value.replace(/'/g, `'\"'\"'`)}'`;
@@ -107,23 +128,157 @@
     return `'${value.replace(/'/g, `''`)}'`;
   }
 
+  function jsonString(value: string) {
+    return JSON.stringify(value);
+  }
+
   type UnixSetupPlatform = 'macos' | 'linux';
 
   function normalizedApiKey(apiKey?: string | null) {
     return apiKey?.trim() || 'sk-REPLACE_ME';
   }
 
-  function buildUnixSetupScript(platform: UnixSetupPlatform, apiKeyValue = newKey.value?.key) {
+  function clientOption(client: SetupClient) {
+    return setupClients.find((item) => item.value === client) ?? setupClients[0];
+  }
+
+  function platformOption(platform: SetupPlatform) {
+    return setupPlatforms.find((item) => item.value === platform) ?? setupPlatforms[0];
+  }
+
+  function includeOpenAiEnv(client: SetupClient) {
+    return client === 'all';
+  }
+
+  function includeClaudeEnv(client: SetupClient) {
+    return client === 'all' || client === 'claude' || client === 'opencode';
+  }
+
+  function includeOpenCodeConfig(client: SetupClient) {
+    return client === 'all' || client === 'opencode';
+  }
+
+  function unixEnvLines(client: SetupClient, apiKeyValue = newKey.value?.key) {
     const rootUrl = shQuote(apiOrigin.value);
     const baseUrl = shQuote(apiBaseUrl.value);
+    const messagesUrl = shQuote(`${apiOrigin.value}/v1/messages`);
     const apiKey = shQuote(normalizedApiKey(apiKeyValue));
     const port = shQuote(apiPort.value);
+    const lines: string[] = [];
+
+    if (includeOpenAiEnv(client)) {
+      lines.push(
+        `export OPENAI_BASE_URL=${baseUrl}`,
+        `export OPENAI_API_KEY=${apiKey}`,
+      );
+    }
+    if (includeClaudeEnv(client)) {
+      lines.push(
+        `export ANTHROPIC_BASE_URL=${rootUrl}`,
+        `export ANTHROPIC_API_KEY=${apiKey}`,
+        `export ANTHROPIC_AUTH_TOKEN=${apiKey}`,
+        `export ANTHROPIC_MODEL='auto'`,
+        `export ANTHROPIC_SMALL_FAST_MODEL='auto'`,
+        `export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC='1'`,
+      );
+    }
+    if (includeOpenCodeConfig(client)) {
+      lines.push(
+        `export OPENCODE_KIRO_PROXY_BASE_URL=${messagesUrl}`,
+        `export OPENCODE_KIRO_PROXY_API_KEY=${apiKey}`,
+        `export OPENCODE_MODEL='claude-sonnet-4.5'`,
+        `export OPENCODE_SMALL_MODEL='claude-haiku-4.5'`,
+      );
+    }
+    lines.push(
+      `export KIRO_PROXY_BASE_URL=${baseUrl}`,
+      `export KIRO_PROXY_API_KEY=${apiKey}`,
+      `export KIRO_PROXY_PORT=${port}`,
+    );
+    return lines;
+  }
+
+  function powershellEnvLines(client: SetupClient, apiKeyValue = newKey.value?.key) {
+    const rootUrl = psQuote(apiOrigin.value);
+    const baseUrl = psQuote(apiBaseUrl.value);
+    const messagesUrl = psQuote(`${apiOrigin.value}/v1/messages`);
+    const apiKey = psQuote(normalizedApiKey(apiKeyValue));
+    const port = psQuote(apiPort.value);
+    const lines: string[] = [];
+
+    if (includeOpenAiEnv(client)) {
+      lines.push(
+        `$env:OPENAI_BASE_URL = ${baseUrl}`,
+        `$env:OPENAI_API_KEY = ${apiKey}`,
+      );
+    }
+    if (includeClaudeEnv(client)) {
+      lines.push(
+        `$env:ANTHROPIC_BASE_URL = ${rootUrl}`,
+        `$env:ANTHROPIC_API_KEY = ${apiKey}`,
+        `$env:ANTHROPIC_AUTH_TOKEN = ${apiKey}`,
+        `$env:ANTHROPIC_MODEL = 'auto'`,
+        `$env:ANTHROPIC_SMALL_FAST_MODEL = 'auto'`,
+        `$env:CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = '1'`,
+      );
+    }
+    if (includeOpenCodeConfig(client)) {
+      lines.push(
+        `$env:OPENCODE_KIRO_PROXY_BASE_URL = ${messagesUrl}`,
+        `$env:OPENCODE_KIRO_PROXY_API_KEY = ${apiKey}`,
+        `$env:OPENCODE_MODEL = 'claude-sonnet-4.5'`,
+        `$env:OPENCODE_SMALL_MODEL = 'claude-haiku-4.5'`,
+      );
+    }
+    lines.push(
+      `$env:KIRO_PROXY_BASE_URL = ${baseUrl}`,
+      `$env:KIRO_PROXY_API_KEY = ${apiKey}`,
+      `$env:KIRO_PROXY_PORT = ${port}`,
+    );
+    return lines;
+  }
+
+  function opencodeJson() {
+    return [
+      `{`,
+      `  "$schema": "https://opencode.ai/config.json",`,
+      `  "provider": {`,
+      `    "anthropic": {`,
+      `      "options": {`,
+      `        "baseURL": ${jsonString(`${apiOrigin.value}/v1/messages`)}`,
+      `      }`,
+      `    }`,
+      `  }`,
+      `}`,
+    ].join('\n');
+  }
+
+  function opencodeUnixLines() {
+    return [
+      `cat > ./opencode.json <<'EOF'`,
+      opencodeJson(),
+      `EOF`,
+      `echo "saved: $(pwd)/opencode.json"`,
+    ];
+  }
+
+  function opencodeWindowsLines() {
+    return [
+      `$opencodeConfig = Join-Path (Get-Location) 'opencode.json'`,
+      `@'`,
+      opencodeJson(),
+      `'@ | Set-Content -Path $opencodeConfig -Encoding UTF8`,
+      `Write-Host "saved: $opencodeConfig"`,
+    ];
+  }
+
+  function buildUnixSetupScript(client: SetupClient, platform: UnixSetupPlatform, apiKeyValue = newKey.value?.key) {
+    const envLines = unixEnvLines(client, apiKeyValue);
     const profileLine =
       platform === 'macos'
         ? `PROFILE="\${ZDOTDIR:-$HOME}/.zshrc"`
         : `PROFILE="$HOME/.bashrc"; [ -n "$ZSH_VERSION" ] && PROFILE="\${ZDOTDIR:-$HOME}/.zshrc"`;
-
-    return [
+    const lines = [
       profileLine,
       `BEGIN="# >>> kiro-proxy env >>>"`,
       `END="# <<< kiro-proxy env <<<"`,
@@ -131,41 +286,22 @@
       `sed -i.bak "/$BEGIN/,/$END/d" "$PROFILE"`,
       `cat >> "$PROFILE" <<'EOF'`,
       `# >>> kiro-proxy env >>>`,
-      `export OPENAI_BASE_URL=${baseUrl}`,
-      `export OPENAI_API_KEY=${apiKey}`,
-      `export ANTHROPIC_BASE_URL=${rootUrl}`,
-      `export ANTHROPIC_API_KEY=${apiKey}`,
-      `export ANTHROPIC_AUTH_TOKEN=${apiKey}`,
-      `export ANTHROPIC_MODEL='auto'`,
-      `export ANTHROPIC_SMALL_FAST_MODEL='auto'`,
-      `export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC='1'`,
-      `export KIRO_PROXY_BASE_URL=${baseUrl}`,
-      `export KIRO_PROXY_API_KEY=${apiKey}`,
-      `export KIRO_PROXY_PORT=${port}`,
+      ...envLines,
       `# <<< kiro-proxy env <<<`,
       `EOF`,
-      `export OPENAI_BASE_URL=${baseUrl}`,
-      `export OPENAI_API_KEY=${apiKey}`,
-      `export ANTHROPIC_BASE_URL=${rootUrl}`,
-      `export ANTHROPIC_API_KEY=${apiKey}`,
-      `export ANTHROPIC_AUTH_TOKEN=${apiKey}`,
-      `export ANTHROPIC_MODEL='auto'`,
-      `export ANTHROPIC_SMALL_FAST_MODEL='auto'`,
-      `export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC='1'`,
-      `export KIRO_PROXY_BASE_URL=${baseUrl}`,
-      `export KIRO_PROXY_API_KEY=${apiKey}`,
-      `export KIRO_PROXY_PORT=${port}`,
-      `echo "saved: $PROFILE"`,
-    ].join('\n');
+      ...envLines,
+    ];
+
+    if (includeOpenCodeConfig(client)) {
+      lines.push(...opencodeUnixLines());
+    }
+    lines.push(`echo "saved: $PROFILE"`);
+    return lines.join('\n');
   }
 
-  function buildWindowsSetupScript(apiKeyValue = newKey.value?.key) {
-    const rootUrl = psQuote(apiOrigin.value);
-    const baseUrl = psQuote(apiBaseUrl.value);
-    const apiKey = psQuote(normalizedApiKey(apiKeyValue));
-    const port = psQuote(apiPort.value);
-
-    return [
+  function buildWindowsSetupScript(client: SetupClient, apiKeyValue = newKey.value?.key) {
+    const envLines = powershellEnvLines(client, apiKeyValue);
+    const lines = [
       `New-Item -ItemType Directory -Force (Split-Path $PROFILE) | Out-Null`,
       `$begin = '# >>> kiro-proxy env >>>'`,
       `$end = '# <<< kiro-proxy env <<<'`,
@@ -174,55 +310,48 @@
       `[regex]::Replace($content, $pattern, '') | Set-Content -Path $PROFILE -Encoding UTF8`,
       `@'`,
       `# >>> kiro-proxy env >>>`,
-      `$env:OPENAI_BASE_URL = ${baseUrl}`,
-      `$env:OPENAI_API_KEY = ${apiKey}`,
-      `$env:ANTHROPIC_BASE_URL = ${rootUrl}`,
-      `$env:ANTHROPIC_API_KEY = ${apiKey}`,
-      `$env:ANTHROPIC_AUTH_TOKEN = ${apiKey}`,
-      `$env:ANTHROPIC_MODEL = 'auto'`,
-      `$env:ANTHROPIC_SMALL_FAST_MODEL = 'auto'`,
-      `$env:CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = '1'`,
-      `$env:KIRO_PROXY_BASE_URL = ${baseUrl}`,
-      `$env:KIRO_PROXY_API_KEY = ${apiKey}`,
-      `$env:KIRO_PROXY_PORT = ${port}`,
+      ...envLines,
       `# <<< kiro-proxy env <<<`,
       `'@ | Add-Content -Path $PROFILE -Encoding UTF8`,
-      `$env:OPENAI_BASE_URL = ${baseUrl}`,
-      `$env:OPENAI_API_KEY = ${apiKey}`,
-      `$env:ANTHROPIC_BASE_URL = ${rootUrl}`,
-      `$env:ANTHROPIC_API_KEY = ${apiKey}`,
-      `$env:ANTHROPIC_AUTH_TOKEN = ${apiKey}`,
-      `$env:ANTHROPIC_MODEL = 'auto'`,
-      `$env:ANTHROPIC_SMALL_FAST_MODEL = 'auto'`,
-      `$env:CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = '1'`,
-      `$env:KIRO_PROXY_BASE_URL = ${baseUrl}`,
-      `$env:KIRO_PROXY_API_KEY = ${apiKey}`,
-      `$env:KIRO_PROXY_PORT = ${port}`,
-      `Write-Host "saved: $PROFILE"`,
-    ].join('\n');
+      ...envLines,
+    ];
+
+    if (includeOpenCodeConfig(client)) {
+      lines.push(...opencodeWindowsLines());
+    }
+    lines.push(`Write-Host "saved: $PROFILE"`);
+    return lines.join('\n');
   }
 
-  function buildSetupScripts(apiKeyValue = newKey.value?.key): Record<SetupPlatform, string> {
+  function buildSetupScript(client: SetupClient, platform: SetupPlatform, apiKeyValue = newKey.value?.key) {
+    if (platform === 'windows') {
+      return buildWindowsSetupScript(client, apiKeyValue);
+    }
+    return buildUnixSetupScript(client, platform, apiKeyValue);
+  }
+
+  function scriptBlock(client: SetupClient, platform: SetupPlatform, apiKeyValue = newKey.value?.key): SetupScriptBlock {
+    const clientMeta = clientOption(client);
+    const platformMeta = platformOption(platform);
     return {
-      macos: buildUnixSetupScript('macos', apiKeyValue),
-      linux: buildUnixSetupScript('linux', apiKeyValue),
-      windows: buildWindowsSetupScript(apiKeyValue),
+      client,
+      platform,
+      clientLabel: clientMeta.label,
+      platformLabel: platformMeta.label,
+      clientDescription: clientMeta.description,
+      platformDescription: platformMeta.description,
+      script: buildSetupScript(client, platform, apiKeyValue),
     };
   }
 
-  function scriptBlocks(scripts: Record<SetupPlatform, string>) {
-    return setupPlatforms.map((item) => ({
-      ...item,
-      script: scripts[item.platform],
-    }));
-  }
-
-  const setupScripts = computed<Record<SetupPlatform, string>>(() => buildSetupScripts(newKey.value?.key));
-  const setupScriptBlocks = computed(() => scriptBlocks(setupScripts.value));
+  const setupScriptBlock = computed(() =>
+    scriptBlock(newSetupClient.value, newSetupPlatform.value, newKey.value?.key),
+  );
   const connectionText = computed(() =>
     [
       `Base URL: ${apiBaseUrl.value}`,
       `Claude Code URL: ${apiOrigin.value}`,
+      `OpenCode URL: ${apiOrigin.value}/v1/messages`,
       `API Key: ${newKey.value?.key ?? ''}`,
       `Port: ${apiPort.value}`,
     ].join('\n'),
@@ -237,8 +366,8 @@
     }
   }
 
-  function scriptCopyMessage(label: string) {
-    return `已复制 ${label} 脚本`;
+  function scriptCopyMessage(block: SetupScriptBlock) {
+    return `已复制 ${block.clientLabel} / ${block.platformLabel} 脚本`;
   }
 
   function rowApiKeyPlaceholder(row: ApiKey) {
@@ -258,11 +387,14 @@
     [
       `Base URL: ${apiBaseUrl.value}`,
       `Claude Code URL: ${apiOrigin.value}`,
+      `OpenCode URL: ${apiOrigin.value}/v1/messages`,
       `API Key: ${configApiKey.value}`,
       `Port: ${apiPort.value}`,
     ].join('\n'),
   );
-  const configScriptBlocks = computed(() => scriptBlocks(buildSetupScripts(configApiKey.value)));
+  const configScriptBlock = computed(() =>
+    scriptBlock(configSetupClient.value, configSetupPlatform.value, configApiKey.value),
+  );
 
   function openShellConfig(row: ApiKey) {
     configKey.value = row;
@@ -425,6 +557,13 @@
             <el-button size="small" @click="copy(apiOrigin)">复制</el-button>
           </div>
           <div class="secret-field">
+            <span class="secret-field__label">OpenCode</span>
+            <code class="secret-field__value mono" :title="`${apiOrigin}/v1/messages`">
+              {{ apiOrigin }}/v1/messages
+            </code>
+            <el-button size="small" @click="copy(`${apiOrigin}/v1/messages`)">复制</el-button>
+          </div>
+          <div class="secret-field">
             <span class="secret-field__label">API Key</span>
             <code class="secret-field__value mono" :title="configApiKey">{{ configApiKey }}</code>
             <el-button size="small" @click="copy(configApiKey)">复制</el-button>
@@ -440,24 +579,43 @@
       <section class="secret-panel setup-scripts">
         <div class="secret-panel__head">
           <div>
-            <h3>三大平台配置脚本</h3>
-            <p>选择对应平台复制到终端执行，会写入当前用户 profile 并立即生效。</p>
+            <h3>配置脚本</h3>
+            <p>先选客户端，再选系统平台；OpenCode 会额外生成当前目录的 opencode.json。</p>
+          </div>
+          <el-button
+            size="small"
+            type="primary"
+            @click="copy(configScriptBlock.script, scriptCopyMessage(configScriptBlock))"
+          >
+            复制当前脚本
+          </el-button>
+        </div>
+
+        <div class="setup-controls">
+          <div class="setup-control">
+            <span class="setup-control__label">客户端</span>
+            <el-radio-group v-model="configSetupClient" size="small">
+              <el-radio-button v-for="item in setupClients" :key="item.value" :label="item.value">
+                {{ item.label }}
+              </el-radio-button>
+            </el-radio-group>
+          </div>
+          <div class="setup-control">
+            <span class="setup-control__label">平台</span>
+            <el-radio-group v-model="configSetupPlatform" size="small">
+              <el-radio-button v-for="item in setupPlatforms" :key="item.value" :label="item.value">
+                {{ item.label }}
+              </el-radio-button>
+            </el-radio-group>
           </div>
         </div>
 
-        <div class="setup-script-list">
-          <article v-for="item in configScriptBlocks" :key="item.platform" class="script-card">
-            <div class="script-card__head">
-              <div>
-                <h4>{{ item.label }}</h4>
-                <p>{{ item.description }}</p>
-              </div>
-              <el-button size="small" type="primary" @click="copy(item.script, scriptCopyMessage(item.label))">
-                复制脚本
-              </el-button>
-            </div>
-            <pre class="setup-scripts__code"><code>{{ item.script }}</code></pre>
-          </article>
+        <div class="script-preview">
+          <div>
+            <h4>{{ configScriptBlock.clientLabel }} / {{ configScriptBlock.platformLabel }}</h4>
+            <p>{{ configScriptBlock.clientDescription }}；{{ configScriptBlock.platformDescription }}。</p>
+          </div>
+          <pre class="setup-scripts__code"><code>{{ configScriptBlock.script }}</code></pre>
         </div>
       </section>
     </div>
@@ -504,6 +662,13 @@
             <el-button size="small" @click="copy(apiOrigin)">复制</el-button>
           </div>
           <div class="secret-field">
+            <span class="secret-field__label">OpenCode</span>
+            <code class="secret-field__value mono" :title="`${apiOrigin}/v1/messages`">
+              {{ apiOrigin }}/v1/messages
+            </code>
+            <el-button size="small" @click="copy(`${apiOrigin}/v1/messages`)">复制</el-button>
+          </div>
+          <div class="secret-field">
             <span class="secret-field__label">API Key</span>
             <code class="secret-field__value mono" :title="newKey.key">{{ newKey.key }}</code>
             <el-button size="small" type="primary" @click="copy(newKey.key)">复制</el-button>
@@ -520,23 +685,42 @@
         <div class="secret-panel__head">
           <div>
             <h3>控制台一键配置</h3>
-            <p>按客户端所在系统复制脚本到终端执行，会写入当前用户 profile 并立即生效。</p>
+            <p>先选客户端，再选系统平台；新密钥会直接写入脚本。</p>
+          </div>
+          <el-button
+            size="small"
+            type="primary"
+            @click="copy(setupScriptBlock.script, scriptCopyMessage(setupScriptBlock))"
+          >
+            复制当前脚本
+          </el-button>
+        </div>
+
+        <div class="setup-controls">
+          <div class="setup-control">
+            <span class="setup-control__label">客户端</span>
+            <el-radio-group v-model="newSetupClient" size="small">
+              <el-radio-button v-for="item in setupClients" :key="item.value" :label="item.value">
+                {{ item.label }}
+              </el-radio-button>
+            </el-radio-group>
+          </div>
+          <div class="setup-control">
+            <span class="setup-control__label">平台</span>
+            <el-radio-group v-model="newSetupPlatform" size="small">
+              <el-radio-button v-for="item in setupPlatforms" :key="item.value" :label="item.value">
+                {{ item.label }}
+              </el-radio-button>
+            </el-radio-group>
           </div>
         </div>
 
-        <div class="setup-script-list">
-          <article v-for="item in setupScriptBlocks" :key="item.platform" class="script-card">
-            <div class="script-card__head">
-              <div>
-                <h4>{{ item.label }}</h4>
-                <p>{{ item.description }}</p>
-              </div>
-              <el-button size="small" type="primary" @click="copy(item.script, scriptCopyMessage(item.label))">
-                复制脚本
-              </el-button>
-            </div>
-            <pre class="setup-scripts__code"><code>{{ item.script }}</code></pre>
-          </article>
+        <div class="script-preview">
+          <div>
+            <h4>{{ setupScriptBlock.clientLabel }} / {{ setupScriptBlock.platformLabel }}</h4>
+            <p>{{ setupScriptBlock.clientDescription }}；{{ setupScriptBlock.platformDescription }}。</p>
+          </div>
+          <pre class="setup-scripts__code"><code>{{ setupScriptBlock.script }}</code></pre>
         </div>
       </section>
     </div>
@@ -624,12 +808,12 @@
 
   .setup-scripts {
     &__code {
-      max-height: 220px;
+      max-height: 280px;
       overflow: auto;
       margin: 0;
       padding: 12px 14px;
       border: 1px solid rgba(148, 163, 184, 0.2);
-      border-radius: 10px;
+      border-radius: 8px;
       background: rgba(15, 23, 42, 0.86);
       color: #e5edff;
       font-size: 12px;
@@ -638,47 +822,52 @@
     }
   }
 
-  .setup-script-list {
+  .setup-controls {
     display: grid;
-    gap: 12px;
+    grid-template-columns: 1fr;
+    gap: 10px;
+    margin-bottom: 12px;
   }
 
-  .script-card {
-    padding: 12px;
-    border: 1px solid rgba(148, 163, 184, 0.22);
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.68);
+  .setup-control {
+    display: grid;
+    grid-template-columns: 68px minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
 
-    &__head {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 12px;
-      margin-bottom: 10px;
+    &__label {
+      color: var(--kp-text-secondary);
+      font-size: 12px;
+      font-weight: 700;
+    }
+  }
 
-      h4 {
-        margin: 0;
-        color: var(--kp-text);
-        font-size: 14px;
-        font-weight: 700;
-      }
+  .script-preview {
+    display: grid;
+    gap: 10px;
 
-      p {
-        margin: 2px 0 0;
-        color: var(--kp-text-secondary);
-        font-size: 12px;
-      }
+    h4 {
+      margin: 0;
+      color: var(--kp-text);
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    p {
+      margin: 2px 0 0;
+      color: var(--kp-text-secondary);
+      font-size: 12px;
     }
   }
 
   @media (max-width: 720px) {
-    .secret-panel__head,
-    .script-card__head {
+    .secret-panel__head {
       flex-direction: column;
     }
 
     .secret-field,
-    .secret-field--compact {
+    .secret-field--compact,
+    .setup-control {
       grid-template-columns: 1fr;
       gap: 6px;
       align-items: start;

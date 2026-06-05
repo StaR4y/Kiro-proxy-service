@@ -177,6 +177,23 @@ Base URL: http://127.0.0.1:8080/v1
 API Key:  sk-...
 ```
 
+OpenCode with the Anthropic provider should use the messages endpoint as its provider base URL:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "anthropic": {
+      "options": {
+        "baseURL": "http://127.0.0.1:8080/v1/messages"
+      }
+    }
+  }
+}
+```
+
+The WebUI API Key page can generate copy-ready scripts for generic shell variables, Claude Code, OpenCode, or all client settings at once.
+
 Persist client API configuration in a console profile:
 
 macOS:

@@ -50,16 +50,39 @@ public class ProxyModelService {
         addModel(data, model("CLAUDE_HAIKU_4_5_20251001_V1_0", "Claude Haiku 4.5 (CW)", now, "kiro-api", "Claude Haiku 4.5 (CodeWhisperer internal ID)"));
         addModel(data, model("CLAUDE_3_7_SONNET_20250219_V1_0", "Claude 3.7 Sonnet (CW)", now, "kiro-api", "Claude 3.7 Sonnet (CodeWhisperer internal ID)"));
 
-        // GPT-compatible aliases kept for OpenAI clients.
-        addModel(data, model("gpt-4o", "GPT-4o compatible alias", now, "kiro-proxy", "GPT-compatible alias for Kiro"));
-        addModel(data, model("gpt-4", "GPT-4 compatible alias", now, "kiro-proxy", "GPT-compatible alias for Kiro"));
-        addModel(data, model("gpt-4-turbo", "GPT-4 Turbo compatible alias", now, "kiro-proxy", "GPT-compatible alias for Kiro"));
-        addModel(data, model("gpt-3.5-turbo", "GPT-3.5 Turbo compatible alias", now, "kiro-proxy", "GPT-compatible alias for Kiro"));
+        // OpenAI-compatible aliases kept for SDKs and tools that validate model IDs client-side.
+        addModel(data, openAiAlias("gpt-5.2", "GPT-5.2", now));
+        addModel(data, openAiAlias("gpt-5.2-pro", "GPT-5.2 pro", now));
+        addModel(data, openAiAlias("gpt-5.1", "GPT-5.1", now));
+        addModel(data, openAiAlias("gpt-5.1-chat-latest", "GPT-5.1 Chat", now));
+        addModel(data, openAiAlias("gpt-5", "GPT-5", now));
+        addModel(data, openAiAlias("gpt-5-mini", "GPT-5 mini", now));
+        addModel(data, openAiAlias("gpt-5-nano", "GPT-5 nano", now));
+        addModel(data, openAiAlias("gpt-4.1", "GPT-4.1", now));
+        addModel(data, openAiAlias("gpt-4.1-mini", "GPT-4.1 mini", now));
+        addModel(data, openAiAlias("gpt-4.1-nano", "GPT-4.1 nano", now));
+        addModel(data, openAiAlias("gpt-4o", "GPT-4o", now));
+        addModel(data, openAiAlias("gpt-4o-mini", "GPT-4o mini", now));
+        addModel(data, openAiAlias("chatgpt-4o", "ChatGPT-4o", now));
+        addModel(data, openAiAlias("gpt-4", "GPT-4", now));
+        addModel(data, openAiAlias("gpt-4-turbo", "GPT-4 Turbo", now));
+        addModel(data, openAiAlias("gpt-3.5-turbo", "GPT-3.5 Turbo", now));
+        addModel(data, openAiAlias("o3", "o3", now));
+        addModel(data, openAiAlias("o3-mini", "o3-mini", now));
+        addModel(data, openAiAlias("o3-pro", "o3-pro", now));
+        addModel(data, openAiAlias("o4-mini", "o4-mini", now));
+        addModel(data, openAiAlias("o1", "o1", now));
+        addModel(data, openAiAlias("o1-pro", "o1-pro", now));
+        addModel(data, openAiAlias("o1-mini", "o1-mini", now));
         return root;
     }
 
     private ModelSpec model(String id, String name, long created, String ownedBy, String description) {
         return model(id, name, created, ownedBy, description, TEXT_AND_IMAGE, DEFAULT_INPUT_TOKENS, DEFAULT_OUTPUT_TOKENS);
+    }
+
+    private ModelSpec openAiAlias(String id, String name, long created) {
+        return model(id, name + " compatible alias", created, "kiro-proxy", "OpenAI-compatible alias for Kiro");
     }
 
     private ModelSpec model(
