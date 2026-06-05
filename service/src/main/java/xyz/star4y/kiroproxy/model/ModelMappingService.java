@@ -25,6 +25,7 @@ public class ModelMappingService {
 
     private static final TypeReference<List<String>> STRING_LIST = new TypeReference<>() {};
     private static final TypeReference<List<Integer>> INTEGER_LIST = new TypeReference<>() {};
+    static final int MAX_MODEL_PATTERN_LENGTH = 256;
 
     private final ModelMappingRepository repository;
     private final ObjectMapper objectMapper;
@@ -53,6 +54,7 @@ public class ModelMappingService {
     }
 
     public Mono<ModelDtos.MappingResponse> create(ModelDtos.CreateMappingRequest request) {
+        validateSourceModel(request.sourceModel());
         ModelMappingEntity entity = new ModelMappingEntity();
         entity.setMappingId(Hashing.shortUuid());
         entity.setName(request.name());
@@ -74,7 +76,10 @@ public class ModelMappingService {
                 if (request.name() != null) entity.setName(request.name());
                 if (request.enabled() != null) entity.setEnabled(request.enabled());
                 if (request.mappingType() != null) entity.setMappingType(request.mappingType());
-                if (request.sourceModel() != null) entity.setSourceModel(request.sourceModel());
+                if (request.sourceModel() != null) {
+                    validateSourceModel(request.sourceModel());
+                    entity.setSourceModel(request.sourceModel());
+                }
                 if (request.targetModels() != null) entity.setTargetModels(toJson(request.targetModels()));
                 if (request.weights() != null) entity.setWeights(toJson(request.weights()));
                 if (request.priority() != null) entity.setPriority(request.priority());
@@ -122,14 +127,58 @@ public class ModelMappingService {
         if (pattern == null || model == null) {
             return false;
         }
+        if (pattern.length() > MAX_MODEL_PATTERN_LENGTH || model.length() > MAX_MODEL_PATTERN_LENGTH) {
+            return false;
+        }
         if ("*".equals(pattern)) {
             return true;
         }
         if (!pattern.contains("*")) {
             return pattern.equalsIgnoreCase(model);
         }
-        String regex = pattern.replace(".", "\\.").replace("*", ".*");
-        return model.matches("(?i)" + regex);
+        return wildcardMatches(pattern, model);
+    }
+
+    private boolean wildcardMatches(String pattern, String model) {
+        int patternIndex = 0;
+        int modelIndex = 0;
+        int starIndex = -1;
+        int matchAfterStar = 0;
+
+        while (modelIndex < model.length()) {
+            if (patternIndex < pattern.length() && pattern.charAt(patternIndex) == '*') {
+                starIndex = patternIndex++;
+                matchAfterStar = modelIndex;
+            } else if (patternIndex < pattern.length()
+                && equalsIgnoreCase(pattern.charAt(patternIndex), model.charAt(modelIndex))) {
+                patternIndex++;
+                modelIndex++;
+            } else if (starIndex != -1) {
+                patternIndex = starIndex + 1;
+                modelIndex = ++matchAfterStar;
+            } else {
+                return false;
+            }
+        }
+
+        while (patternIndex < pattern.length() && pattern.charAt(patternIndex) == '*') {
+            patternIndex++;
+        }
+        return patternIndex == pattern.length();
+    }
+
+    private boolean equalsIgnoreCase(char left, char right) {
+        return Character.toLowerCase(left) == Character.toLowerCase(right);
+    }
+
+    private void validateSourceModel(String sourceModel) {
+        if (sourceModel != null && sourceModel.length() > MAX_MODEL_PATTERN_LENGTH) {
+            throw new ApiException(
+                HttpStatus.BAD_REQUEST,
+                "MODEL_PATTERN_TOO_LONG",
+                "sourceModel must be at most " + MAX_MODEL_PATTERN_LENGTH + " characters"
+            );
+        }
     }
 
     private String weightedPick(List<String> targets, List<Integer> weights) {

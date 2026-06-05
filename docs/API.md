@@ -199,7 +199,7 @@ Supported request fields in this phase:
 
 | Field | Type | Required | Notes |
 | --- | --- | --- | --- |
-| `model` | string | yes | Model mapping is applied before upstream request. |
+| `model` | string | yes | Model mapping is applied before upstream request. Max length: 256 characters. |
 | `messages` | array | yes | OpenAI-style `system`, `user`, `assistant`, `tool` roles. |
 | `temperature` | number | no | Forwarded to Kiro inference config. |
 | `top_p` | number | no | Forwarded to Kiro inference config. |
@@ -800,7 +800,7 @@ Fields:
 | --- | --- | --- | --- |
 | `name` | string | yes | Rule display name. |
 | `mappingType` | string | yes | `replace`, `alias`, or `loadbalance`. |
-| `sourceModel` | string | yes | Exact model or wildcard pattern such as `gpt-*`. |
+| `sourceModel` | string | yes | Exact model or literal wildcard pattern such as `gpt-*`; only `*` is special, regex metacharacters are treated as normal text. Max length: 256 characters. |
 | `targetModels` | string array | yes | Candidate target models. |
 | `weights` | integer array | no | Used only when length equals `targetModels.length`. |
 | `priority` | integer | no | Lower number wins. Default is `100`. |

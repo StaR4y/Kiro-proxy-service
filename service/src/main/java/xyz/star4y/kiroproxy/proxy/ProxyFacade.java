@@ -27,6 +27,8 @@ import xyz.star4y.kiroproxy.stats.StatsService;
 @Service
 public class ProxyFacade {
 
+    static final int MAX_MODEL_ID_LENGTH = 256;
+
     private enum ResponseMode {
         OPENAI_CHAT,
         OPENAI_RESPONSES,
@@ -492,6 +494,16 @@ public class ProxyFacade {
     private void validateChatRequest(JsonNode request) {
         if (!request.hasNonNull("model")) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "MODEL_REQUIRED", "model is required");
+        }
+        if (!request.path("model").isTextual()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "MODEL_INVALID", "model must be a string");
+        }
+        if (request.path("model").asText().length() > MAX_MODEL_ID_LENGTH) {
+            throw new ApiException(
+                HttpStatus.BAD_REQUEST,
+                "MODEL_TOO_LONG",
+                "model must be at most " + MAX_MODEL_ID_LENGTH + " characters"
+            );
         }
         if (!request.path("messages").isArray() || request.path("messages").isEmpty()) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "MESSAGES_REQUIRED", "messages must be a non-empty array");
