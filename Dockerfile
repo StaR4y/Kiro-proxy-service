@@ -10,8 +10,8 @@ FROM eclipse-temurin:17-jdk AS build
 
 WORKDIR /workspace
 COPY . .
-COPY --from=webui-build /workspace/webui/dist/ /workspace/service/src/main/resources/static/
-RUN chmod +x gradlew && ./gradlew --no-daemon :service:bootJar -x test
+COPY --from=webui-build /workspace/webui/dist/ /workspace/webui/dist/
+RUN chmod +x gradlew && ./gradlew --no-daemon :service:bootJar -x test -PskipWebuiBuild=true
 
 FROM eclipse-temurin:17-jre
 

@@ -43,6 +43,16 @@ For future updates:
 ```bash
 cd /opt/kiro-proxy-service
 git pull
+docker compose up -d --build service
+```
+
+The service image includes the current WebUI build. If 1Panel still shows the old page after an update, rebuild the service image without cache and then refresh the browser cache:
+
+```bash
+cd /opt/kiro-proxy-service
+docker compose build --no-cache service
+docker compose up -d service
+docker compose logs --tail=160 service
 ```
 
 ## 2. Configure Environment

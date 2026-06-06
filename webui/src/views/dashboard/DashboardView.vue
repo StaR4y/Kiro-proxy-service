@@ -397,7 +397,7 @@
               <h3>模型调用趋势</h3>
               <p class="text-muted">Top 4 模型按时间聚合</p>
             </div>
-            <div class="chart-legend" v-if="chartData.series.length">
+            <div v-if="chartData.series.length" class="chart-legend">
               <span v-for="series in chartData.series" :key="series.name">
                 <i :style="{ backgroundColor: series.color }" />
                 {{ series.name }}

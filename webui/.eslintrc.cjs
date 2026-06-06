@@ -13,8 +13,11 @@ module.exports = {
   rules: {
     'vue/multi-word-component-names': 'off',
     'vue/require-default-prop': 'off',
-    'no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
-    'no-console': ['warn', { allow: ['warn', 'error'] }],
+    'vue/max-attributes-per-line': 'off',
+    'vue/singleline-html-element-content-newline': 'off',
+    'vue/html-quotes': 'off',
+    'no-unused-vars': 'off',
+    'no-console': ['error', { allow: ['warn', 'error'] }],
   },
   ignorePatterns: ['dist', 'node_modules', 'auto-imports.d.ts', 'components.d.ts'],
 };

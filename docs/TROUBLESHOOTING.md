@@ -94,6 +94,23 @@ docker compose logs -f mysql
 
 The default project compose file already uses this compatible MySQL 8.0 image.
 
+## WebUI Does Not Change After Installer Update
+
+Cause:
+
+The installer pulls the latest repo and runs `docker compose up -d --build`. If the service image build fails, Docker Compose keeps the previous running container, so the old embedded WebUI is still served.
+
+Check the build and service logs:
+
+```bash
+cd /opt/kiro-proxy-service
+docker compose build --no-cache service
+docker compose up -d service
+docker compose logs --tail=160 service
+```
+
+The successful image build must run the WebUI build and then `:service:bootJar`. The final jar should contain `BOOT-INF/classes/static/index.html`.
+
 ## `Port 8080 was already in use`
 
 Check the process:

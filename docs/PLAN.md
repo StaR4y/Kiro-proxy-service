@@ -38,6 +38,7 @@ Completed:
 - Official provider logo assets and refined model ID catalog UI for clearer vendor/family browsing.
 - ReDoS hardening for model mapping: linear wildcard matcher plus 256-character model/sourceModel limits.
 - Multi-module layout with API contracts in `api`, concrete server implementation in `service`, and Vue/Vite management console in `webui`.
+- WebUI npm Gradle bridge and BootJar static-resource packaging so installer updates include the current frontend build.
 
 Verified:
 

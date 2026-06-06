@@ -95,7 +95,7 @@ npm run build
 产物位于 `webui/dist/`，所有路径使用相对引用（`base: './'`），可以直接：
 
 1. **同源部署**：把 `dist/` 拷贝到任何静态服务器（Nginx / OSS / CDN），后端反向代理或同源均可。
-2. **嵌入后端**：把 `dist/` 内容拷贝到 `service/src/main/resources/static/admin/`，访问 `http://<host>/admin/index.html` 即可。
+2. **嵌入后端**：执行 `./gradlew :service:bootJar`，构建会把 `dist/` 打进 Spring Boot jar，访问 `http://<host>/#/login` 即可。
 
 由于使用 hash 路由（`/#/login`），不需要单独配置 SPA fallback。
 

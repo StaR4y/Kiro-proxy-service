@@ -121,7 +121,7 @@
   const configSetupPlatform = ref<SetupPlatform>('macos');
 
   function shQuote(value: string) {
-    return `'${value.replace(/'/g, `'\"'\"'`)}'`;
+    return `'${value.replace(/'/g, `'"'"'`)}'`;
   }
 
   function psQuote(value: string) {

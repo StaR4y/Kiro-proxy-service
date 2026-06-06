@@ -125,4 +125,15 @@ git pull
 ./scripts/install-server.sh
 ```
 
+The update path rebuilds the WebUI with Docker and embeds the generated static files into the Spring Boot jar. If the browser still shows an old UI, check the service build logs first:
+
+```bash
+cd /opt/kiro-proxy-service
+docker compose build --no-cache service
+docker compose up -d service
+docker compose logs --tail=160 service
+```
+
+When a build fails, Compose keeps the previous running container, so the old WebUI can remain visible even though `git pull` succeeded.
+
 Do not delete `./data/mysql` unless you want to reset the database.

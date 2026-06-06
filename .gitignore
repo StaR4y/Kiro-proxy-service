@@ -40,6 +40,12 @@ bin/
 ### VS Code ###
 .vscode/
 
+### WebUI generated files ###
+webui/node_modules/
+webui/dist/
+webui/auto-imports.d.ts
+webui/components.d.ts
+
 ### Mac OS ###
 .DS_Store
 
